@@ -1,0 +1,911 @@
+// app/app/prospects/page.tsx
+
+'use client';
+
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import * as Tooltip from '@radix-ui/react-tooltip';
+import {
+  CITY_SERVICE_AREA,
+  DEFAULT_PAGE_SIZE,
+  DEFAULT_PROSPECT_FILTERS,
+  DEFAULT_PROSPECT_SORT,
+  fetchAgencyPlanUsage,
+  fetchCampaign,
+  fetchProspects,
+  fetchProspectStatusCounts,
+  getAvailableCities,
+  getAvailableKeywords,
+  getEmailCellState,
+  getFicheGoogleState,
+  hasPhoneMismatch,
+  PROSPECT_STATUS_TAB_LABELS,
+  updateProspectOutcome,
+  type AgencyPlanUsage,
+  type Campaign,
+  type Prospect,
+  type ProspectFilters,
+  type ProspectSort,
+  type ProspectSortKey,
+  type ProspectStatusTab,
+} from '@/lib/mock-data';
+import { LeadQuotaStat } from '../_components/lead-quota-stat';
+
+const STATUS_TABS: ProspectStatusTab[] = [
+  'tous',
+  'a_traiter',
+  'en_cours',
+  'sans_reponse',
+  'gagnes',
+  'ignores',
+];
+
+// The dropdown in each row offers exactly these five choices. "À traiter"
+// resets outcome back to NULL — every transition is reversible, and moving
+// a lead to "Ignoré" only changes which tab it appears under, it never
+// removes it from the list.
+const OUTCOME_OPTIONS: { value: string; label: string; outcome: Prospect['outcome'] }[] = [
+  { value: 'a_traiter', label: 'À traiter', outcome: null },
+  { value: 'en_cours', label: 'En cours', outcome: 'in_progress' },
+  { value: 'sans_reponse', label: 'Sans réponse', outcome: 'no_response' },
+  { value: 'gagne', label: 'Gagné', outcome: 'won' },
+  { value: 'ignore', label: 'Ignoré', outcome: 'lost' },
+];
+
+function outcomeToOptionValue(outcome: Prospect['outcome']): string {
+  const match = OUTCOME_OPTIONS.find((o) => o.outcome === outcome);
+  return match ? match.value : 'a_traiter';
+}
+
+// PDF row actions — corrected per Opus. There is one client document
+// ("le diagnostic"), not two: the earlier separate "Diagnostic" (view) and
+// "PDF client" (download) actions pointed at the same underlying file.
+// The real PDF service exposes GET /pdf/:leadId with
+// Content-Disposition: inline, so a browser tab IS the viewer — no
+// embedded iframe (inconsistent across browsers), print/download come
+// free with the tab. Base URL is not confirmed yet, hence the stub.
+function diagnosticUrl(leadId: string): string {
+  return `/pdf/${leadId}`; // STUB — confirm the real PDF service base URL before wiring
+}
+
+function formatPhoneFR(e164: string | null): string {
+  if (!e164) return '—';
+  if (!e164.startsWith('+33')) return e164;
+  const national = `0${e164.slice(3)}`;
+  return national.replace(/(\d{2})(?=\d)/g, '$1 ');
+}
+
+// Explicit locale + timeZone so server and client render the same string —
+// never relies on the runtime's local timezone.
+function formatDateFR(iso: string | null): string {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(iso));
+}
+
+function renderStars(rating: number): string {
+  const rounded = Math.round(rating);
+  return '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
+}
+
+const WEBSITE_KIND_LABELS: Record<Prospect['website_kind'], string> = {
+  own: 'Site propre',
+  none: 'Aucun',
+  booking_platform: 'Page qu\u2019il ne contrôle pas',
+  social: 'Page qu\u2019il ne contrôle pas',
+  directory: 'Page qu\u2019il ne contrôle pas',
+};
+
+// Task 40f. Everything gathered for a lead, in four groups. Every
+// enrichment-dependent field uses ITS OWN correct marker — avis/note/
+// photos are available immediately (brief §6) and are never gated, unlike
+// gbp_completeness/is_claimed (mbi_fetched_at) or title/H1/meta
+// (html_checked_at). Deliberately excluded: competitor list and score
+// breakdown — printing a per-signal deduction publishes the scoring
+// formula, per the brief's explicit instruction.
+function LeadDetailPanel({ p }: { p: Prospect }) {
+  const ficheState = getFicheGoogleState(p);
+  const emailState = getEmailCellState(p);
+  const htmlPending = p.html_checked_at === null;
+
+  return (
+    <div className="detail-panel">
+      <div className="detail-group">
+        <h3 className="detail-group-title">Contact</h3>
+        <dl>
+          <div className="detail-field">
+            <dt>Téléphone (fiche Google)</dt>
+            <dd className="mono-num">{formatPhoneFR(p.phone)}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Téléphone (site web)</dt>
+            <dd className="mono-num">
+              {p.nap_phone_match === null ? (
+                <span className="pending-cell">Pas encore traité</span>
+              ) : (
+                <>
+                  {formatPhoneFR(p.website_phone_raw)}
+                  {hasPhoneMismatch(p) && <span className="phone-mismatch-marker"> ⚠ différent</span>}
+                </>
+              )}
+            </dd>
+          </div>
+          <div className="detail-field">
+            <dt>E-mail</dt>
+            <dd>
+              {emailState === 'pending' && <span className="pending-cell">Pas encore traité</span>}
+              {emailState === 'no_email' && <span className="badge badge-neutral">Aucune adresse</span>}
+              {emailState === 'has_email' && (
+                <>
+                  {p.email}{' '}
+                  {p.email_status === 'deliverable' && <span className="badge badge-ok">Vérifié</span>}
+                  {(p.email_status === 'risky' ||
+                    p.email_status === 'pending_verification' ||
+                    p.email_status === 'unknown') && (
+                    <span className="badge badge-pending" title={p.email_status ?? undefined}>
+                      Non garanti
+                    </span>
+                  )}
+                  {(p.email_status === null || p.email_status === 'invalid') && (
+                    <span className="badge badge-neutral">Aucune adresse</span>
+                  )}
+                </>
+              )}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="detail-group">
+        <h3 className="detail-group-title">Fiche Google</h3>
+        <dl>
+          <div className="detail-field">
+            <dt>Statut</dt>
+            <dd>
+              {ficheState === 'claimed' && <span className="badge badge-ok">Revendiquée</span>}
+              {ficheState === 'unclaimed' && (
+                <span className="badge badge-opportunity">Non revendiquée</span>
+              )}
+              {/* 'unknown' renders nothing — is_claimed not returned, never labelled */}
+            </dd>
+          </div>
+          <div className="detail-field">
+            <dt>Complétude</dt>
+            {/* Always populated on a delivered lead — mbi_fetched_at is
+                never null here (see the comment on it in mock-data.ts).
+                No pending branch: that state cannot occur on this table. */}
+            <dd className="mono-num">{p.gbp_completeness}%</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Avis</dt>
+            <dd className="mono-num">{p.review_count !== null ? p.review_count : '—'}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Note</dt>
+            <dd>
+              {p.rating !== null ? (
+                <>
+                  <span className="stars-row">{renderStars(p.rating)}</span>{' '}
+                  <span className="mono-num">{p.rating.toFixed(1)}</span>
+                </>
+              ) : (
+                <span className="no-rating">—</span>
+              )}
+            </dd>
+          </div>
+          <div className="detail-field">
+            <dt>Photos</dt>
+            <dd className="mono-num">{p.photo_count !== null ? p.photo_count : '—'}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="detail-group">
+        <h3 className="detail-group-title">Site web</h3>
+        <dl>
+          <div className="detail-field">
+            <dt>Type</dt>
+            <dd>{WEBSITE_KIND_LABELS[p.website_kind]}</dd>
+          </div>
+          {p.website_kind === 'own' && (
+            <>
+              <div className="detail-field">
+                <dt>Balise titre</dt>
+                <dd>
+                  {htmlPending ? (
+                    <span className="pending-cell">Pas encore traité</span>
+                  ) : p.website_title_tag !== null ? (
+                    <span className="verbatim">{p.website_title_tag}</span>
+                  ) : (
+                    <span className="badge badge-neutral">Aucune</span>
+                  )}
+                </dd>
+              </div>
+              <div className="detail-field">
+                <dt>H1</dt>
+                <dd>
+                  {htmlPending ? (
+                    <span className="pending-cell">Pas encore traité</span>
+                  ) : p.h1_text !== null ? (
+                    <span className="verbatim">{p.h1_text}</span>
+                  ) : (
+                    <span className="badge badge-neutral">Aucun</span>
+                  )}
+                </dd>
+              </div>
+              <div className="detail-field">
+                <dt>Méta description</dt>
+                <dd>
+                  {htmlPending ? (
+                    <span className="pending-cell">Pas encore traité</span>
+                  ) : p.meta_description !== null ? (
+                    <>
+                      <span className="verbatim">{p.meta_description}</span>{' '}
+                      <span className="mono-num meta-length">({p.meta_description.length} car.)</span>
+                    </>
+                  ) : (
+                    <span className="badge badge-neutral">Aucune</span>
+                  )}
+                </dd>
+              </div>
+            </>
+          )}
+          {/* website_kind === 'none': nothing further — a site that
+              doesn't exist has no title to report, not "Aucune". */}
+        </dl>
+        {(p.website_kind === 'booking_platform' ||
+          p.website_kind === 'social' ||
+          p.website_kind === 'directory') && (
+          <p className="detail-note">
+            Le prospect ne contrôle pas cette page — son titre et son H1 ne lui
+            appartiennent pas.
+          </p>
+        )}
+      </div>
+
+      <div className="detail-group">
+        <h3 className="detail-group-title">Mesures</h3>
+        <dl>
+          <div className="detail-field">
+            <dt>Position</dt>
+            <dd className="mono-num">{p.maps_position}</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Potentiel</dt>
+            {/* Always populated on a delivered lead — same invariant as
+                Complétude above. seo_score's TYPE stays nullable
+                (number | null) since that's still the honest shape of
+                the real column, but arithmetic needs a concrete number;
+                the assertion is safe precisely because delivery can't
+                happen without a score. */}
+            <dd className="mono-num">{100 - (p.seo_score as number)}%</dd>
+          </div>
+          <div className="detail-field">
+            <dt>Date de mesure</dt>
+            <dd className="mono-num">{formatDateFR(p.measured_at)}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+// Five column-header explanations. Kept out of the page body — at 50 rows
+// a paragraph of standing explanation is noise; an on-demand tooltip isn't.
+const COLUMN_HELP = {
+  position:
+    'Meilleur classement observé sur ce mot-clé, tous points de mesure confondus. Les trois premières places forment le pack local.',
+  potentiel:
+    'Part des points récupérables sur cette fiche. Plus le pourcentage est élevé, plus il y a de travail à vendre. Un prospect à 85 % a beaucoup à corriger ; un prospect à 20 % est déjà bien optimisé.',
+  ficheGoogle:
+    'Non revendiquée signifie que personne n\u2019a confirmé auprès de Google être le propriétaire de l\u2019établissement. Le prospect ne peut pas répondre à ses avis, et des tiers peuvent modifier ses informations sans qu\u2019il en soit informé. Une colonne vide signifie que Google n\u2019a rien indiqué.',
+  siteWeb:
+    'Ne contrôle pas désigne une page que le prospect ne maîtrise pas : plateforme de réservation, réseau social ou annuaire. Il ne peut ni en changer le contenu ni en modifier la présentation.',
+  email:
+    'Vérifié : adresse confirmée valide. Non garanti : l\u2019adresse existe mais sa validité n\u2019est pas confirmée — un envoi peut rebondir et affecter votre réputation d\u2019expéditeur. Aucune adresse : pas d\u2019adresse exploitable.',
+} as const;
+
+// Keyboard- and touch-accessible by construction: a real <button>, not a
+// title attribute (title doesn't work on keyboard or touch). Radix wires
+// aria-describedby between trigger and content, opens on hover AND focus,
+// and closes on Escape automatically. Portal renders outside the
+// horizontally-scrolling table wrapper so the tooltip is never clipped by
+// its overflow:auto.
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger asChild>
+        <button type="button" className="info-trigger" aria-label="Plus d'informations">
+          ⓘ
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content className="info-tooltip-content" sideOffset={6}>
+          {text}
+          <Tooltip.Arrow className="info-tooltip-arrow" />
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+}
+
+// A compact page list with ellipses — first, last, current ±1. At Premium
+// volume (~21,600 leads / 50 per page ≈ 432 pages) rendering every page
+// number is not an option.
+function pageWindow(current: number, total: number): (number | 'ellipsis')[] {
+  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
+  const sorted = Array.from(pages)
+    .filter((p) => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+  const out: (number | 'ellipsis')[] = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push('ellipsis');
+    out.push(sorted[i]);
+  }
+  return out;
+}
+
+export default function ProspectsPage() {
+  const [activeTab, setActiveTab] = useState<ProspectStatusTab>('tous');
+  const [filters, setFilters] = useState<ProspectFilters>(DEFAULT_PROSPECT_FILTERS);
+  const [searchInput, setSearchInput] = useState(''); // immediate UI value, debounced into filters.search
+  const [sort, setSort] = useState<ProspectSort>(DEFAULT_PROSPECT_SORT);
+  const [page, setPage] = useState(1);
+
+  const [rows, setRows] = useState<Prospect[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [tabCounts, setTabCounts] = useState<Record<ProspectStatusTab, number>>({
+    tous: 0,
+    a_traiter: 0,
+    en_cours: 0,
+    sans_reponse: 0,
+    gagnes: 0,
+    ignores: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Independent of the prospect list's own load() -- unrelated data, own
+  // lifecycle, fetched once on mount.
+  const [planUsage, setPlanUsage] = useState<AgencyPlanUsage | null>(null);
+  useEffect(() => {
+    fetchAgencyPlanUsage().then(setPlanUsage);
+  }, []);
+
+  // Campaign scoping via ?campaign=<id> -- brief 5.4: "the same table,
+  // filtered by campaign... a filter parameter, not a new screen."
+  // /app/campagnes/[id] links here for the full filterable/sortable/
+  // paginated view of a single campaign's delivered leads. Seeds filters
+  // to that campaign's keyword+commune once its info resolves; there's a
+  // brief moment before that where the page shows unfiltered defaults,
+  // same tradeoff every other async-loaded piece of this page already has.
+  const searchParams = useSearchParams();
+  const campaignId = searchParams.get('campaign');
+  const [campaignScope, setCampaignScope] = useState<Campaign | null>(null);
+  useEffect(() => {
+    if (!campaignId) return;
+    fetchCampaign(campaignId).then((c) => {
+      if (!c) return;
+      setCampaignScope(c);
+      setFilters((f) => ({ ...f, keyword: c.keyword, city: c.commune.nom }));
+    });
+  }, [campaignId]);
+
+  // Task 40f — one row expanded at a time. Opening a new row closes
+  // whichever was open, since a plain useState with a single id already
+  // gives that for free.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function toggleExpanded(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
+
+  const keywords = getAvailableKeywords();
+  const cities = getAvailableCities();
+
+  // Debounce the search box only — the select filters change on discrete
+  // user actions and can fire immediately, but typing shouldn't trigger a
+  // fetch per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFilters((f) => (f.search === searchInput ? f : { ...f, search: searchInput }));
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Latest-request-wins guard: an in-flight fetch that resolves after a
+  // newer one must not overwrite fresher data. Matters once this is a real
+  // network call; harmless now.
+  const requestIdRef = useRef(0);
+
+  // Bug fix (bfcache hydration mismatch): the browser can restore this
+  // page from back/forward cache with HTML captured AFTER loading
+  // finished (rows/counts/pagination all real), while React re-hydrates
+  // that restored HTML against a fresh mount whose useState(true) initial
+  // values imply nothing has loaded yet. The two disagree on content that
+  // depends on fetched state, and React won't patch that up.
+  // hasLoaded exists specifically to break that: it starts false on every
+  // mount (including a bfcache restore) and flips true only inside a
+  // client-side effect, which never runs during the hydration check
+  // itself. Content gated on hasLoaded is therefore never part of the
+  // hydration comparison at all — by the time it can appear, hydration is
+  // already settled and this is a plain client-side update, immune to
+  // this whole bug class regardless of what the browser restored.
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  const load = useCallback(async () => {
+    const requestId = (requestIdRef.current += 1);
+    setLoading(true);
+    try {
+      const [page1, counts] = await Promise.all([
+        fetchProspects({ filters, tab: activeTab, sort, page, pageSize: DEFAULT_PAGE_SIZE }),
+        fetchProspectStatusCounts(filters),
+      ]);
+      if (requestId !== requestIdRef.current) return; // a newer request has since started
+      setRows(page1.rows);
+      setTotalCount(page1.totalCount);
+      setTabCounts(counts);
+      setHasLoaded(true); // idempotent after the first real completion — never resets
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, [filters, activeTab, sort, page]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleStatusChange(id: string, value: string) {
+    const option = OUTCOME_OPTIONS.find((o) => o.value === value);
+    if (!option) return;
+    await updateProspectOutcome(id, option.outcome);
+    await load();
+  }
+
+  function selectTab(tab: ProspectStatusTab) {
+    setActiveTab(tab);
+    setPage(1);
+  }
+
+  function setFilter<K extends keyof ProspectFilters>(key: K, value: ProspectFilters[K]) {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setPage(1);
+  }
+
+  function toggleSort(key: ProspectSortKey) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' },
+    );
+    setPage(1);
+  }
+
+  function sortIndicator(key: ProspectSortKey) {
+    if (sort.key !== key) return null;
+    return sort.dir === 'asc' ? '↑' : '↓';
+  }
+
+  function resetFilters() {
+    setFilters(DEFAULT_PROSPECT_FILTERS);
+    setSearchInput('');
+    setSort(DEFAULT_PROSPECT_SORT);
+    setActiveTab('tous');
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * DEFAULT_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * DEFAULT_PAGE_SIZE, totalCount);
+
+  return (
+    <Tooltip.Provider delayDuration={200}>
+    <div>
+      <div className="page-head">
+        <h1>
+          {campaignScope
+            ? `${campaignScope.keyword.charAt(0).toUpperCase()}${campaignScope.keyword.slice(1)} \u00b7 ${campaignScope.commune.nom}`
+            : 'Prospects'}
+        </h1>
+      </div>
+
+      <div className="status-tabs-row">
+        <div className="status-tabs" role="tablist" aria-label="Statut des prospects">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab}
+              role="tab"
+              type="button"
+              aria-selected={activeTab === tab}
+              className={activeTab === tab ? 'active' : undefined}
+              onClick={() => selectTab(tab)}
+            >
+              {PROSPECT_STATUS_TAB_LABELS[tab]}
+              <span className="n">{tabCounts[tab]}</span>
+            </button>
+          ))}
+        </div>
+        {/* Both counts live here, not floating above the title — they
+            describe the list below, and the filtered count specifically
+            changes as filters are used, so it sits next to what changes
+            it. */}
+        <div className="status-tabs-stats">
+          {planUsage && <LeadQuotaStat planUsage={planUsage} />}
+          <span className="filtered-count">
+            <span className="mono-num">{totalCount}</span> prospects correspondants aux filtres
+          </span>
+        </div>
+      </div>
+
+      <div className="filters-bar">
+        <div className="filter-group">
+          <label htmlFor="f-keyword">Mot-clé</label>
+          <select
+            id="f-keyword"
+            value={filters.keyword}
+            onChange={(e) => setFilter('keyword', e.target.value)}
+          >
+            <option value="tous">Tous les mots-clés</option>
+            {keywords.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="f-city">Ville</label>
+          <select id="f-city" value={filters.city} onChange={(e) => setFilter('city', e.target.value)}>
+            <option value="toutes">Toutes les villes</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+            <option value={CITY_SERVICE_AREA}>Zone d&rsquo;intervention</option>
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="f-claim">Fiche Google</label>
+          <select
+            id="f-claim"
+            value={filters.claim}
+            onChange={(e) => setFilter('claim', e.target.value as ProspectFilters['claim'])}
+          >
+            <option value="toutes">Toutes</option>
+            <option value="revendiquee">Revendiquée</option>
+            <option value="non_revendiquee">Non revendiquée</option>
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="f-website">Site web</label>
+          <select
+            id="f-website"
+            value={filters.website}
+            onChange={(e) => setFilter('website', e.target.value as ProspectFilters['website'])}
+          >
+            <option value="tous">Tous</option>
+            <option value="own">Site propre</option>
+            <option value="none">Aucun site</option>
+            <option value="not_controlled">Page qu&rsquo;il ne contrôle pas</option>
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="f-email">E-mail</label>
+          <select
+            id="f-email"
+            value={filters.email}
+            onChange={(e) => setFilter('email', e.target.value as ProspectFilters['email'])}
+          >
+            <option value="tous">Tous</option>
+            <option value="verifie">Vérifié</option>
+            <option value="present_non_verifie">Non garanti</option>
+            <option value="aucun">Aucune adresse</option>
+          </select>
+        </div>
+
+        <div className="filter-group" style={{ flex: '1 1 220px' }}>
+          <label htmlFor="f-search">Recherche</label>
+          <input
+            id="f-search"
+            type="search"
+            placeholder="Nom de l'entreprise…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </div>
+
+        <button type="button" className="reset-btn" onClick={resetFilters}>
+          Réinitialiser les filtres
+        </button>
+      </div>
+
+      {!loading && rows.length === 0 ? (
+        <div className="empty-state">
+          <p>Aucun prospect ne correspond à ces filtres.</p>
+          <button type="button" className="btn btn-ghost" onClick={resetFilters}>
+            Réinitialiser les filtres
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="prospect-table-wrap" aria-busy={loading} style={loading ? { opacity: 0.6 } : undefined}>
+            <table className="prospect-table">
+              <thead>
+                <tr>
+                  <th>Entreprise</th>
+                  <th>Mot-clé</th>
+                  <th>
+                    <span className="th-cluster">
+                      <button type="button" onClick={() => toggleSort('maps_position')}>
+                        Position {sortIndicator('maps_position')}
+                      </button>
+                      <InfoTooltip text={COLUMN_HELP.position} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="th-cluster">
+                      <button type="button" onClick={() => toggleSort('potentiel')}>
+                        Potentiel {sortIndicator('potentiel')}
+                      </button>
+                      <InfoTooltip text={COLUMN_HELP.potentiel} />
+                    </span>
+                  </th>
+                  <th>
+                    <button type="button" onClick={() => toggleSort('rating')}>
+                      Avis {sortIndicator('rating')}
+                    </button>
+                  </th>
+                  <th>
+                    <span className="th-cluster">
+                      Fiche Google
+                      <InfoTooltip text={COLUMN_HELP.ficheGoogle} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="th-cluster">
+                      Site web
+                      <InfoTooltip text={COLUMN_HELP.siteWeb} />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="th-cluster">
+                      E-mail
+                      <InfoTooltip text={COLUMN_HELP.email} />
+                    </span>
+                  </th>
+                  <th>Téléphone</th>
+                  <th>
+                    <button type="button" onClick={() => toggleSort('measured_at')}>
+                      Mesuré le {sortIndicator('measured_at')}
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" onClick={() => toggleSort('delivered_at')}>
+                      Livré le {sortIndicator('delivered_at')}
+                    </button>
+                  </th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((p) => {
+                  const ficheState = getFicheGoogleState(p);
+                  const emailState = getEmailCellState(p);
+                  const phoneMismatch = hasPhoneMismatch(p);
+                  const isExpanded = expandedId === p.id;
+                  return (
+                    <Fragment key={p.id}>
+                    <tr
+                      className={isExpanded ? 'row-expanded' : undefined}
+                      onClick={() => toggleExpanded(p.id)}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleExpanded(p.id);
+                        }
+                      }}
+                    >
+                      <td className="cell-name">
+                        <div className="biz-row">
+                          <span className="expand-chevron" aria-hidden="true">
+                            {isExpanded ? '▾' : '▸'}
+                          </span>
+                          <span className="biz">{p.business_name}</span>
+                        </div>
+                        <div className="loc">{p.city ?? 'Zone d\u2019intervention'}</div>
+                      </td>
+                      <td>{p.keyword}</td>
+                      <td className="mono-num">{p.maps_position}</td>
+                      {/* Always populated on a delivered lead — mbi_fetched_at is
+                          never null here (see the comment on it in mock-data.ts).
+                          No pending branch: that state cannot occur on this table.
+                          seo_score's type stays nullable; the assertion is safe
+                          precisely because delivery can't happen without a score. */}
+                      <td className="mono-num">{100 - (p.seo_score as number)}%</td>
+                      <td>
+                        {p.rating !== null ? (
+                          <>
+                            <span className="stars-row">{renderStars(p.rating)}</span>{' '}
+                            <span className="mono-num" style={{ fontSize: 14 }}>
+                              {p.rating.toFixed(1)}
+                              {p.review_count !== null ? ` (${p.review_count})` : ''}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="no-rating">
+                            {p.review_count !== null ? `${p.review_count} avis` : '—'}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {/* 'unknown' (is_claimed not returned) renders no badge —
+                            "not returned" is not a value, and must never be labelled.
+                            gbp_completeness is a SEPARATE field from is_claimed and is
+                            always shown — no pending case, same invariant as Potentiel. */}
+                        {(ficheState === 'claimed' || ficheState === 'unclaimed') && (
+                          <span className={`badge ${ficheState === 'claimed' ? 'badge-ok' : 'badge-opportunity'}`}>
+                            {ficheState === 'claimed' ? 'Revendiquée' : 'Non revendiquée'}
+                          </span>
+                        )}
+                        {p.gbp_completeness !== null && (
+                          <span className="mono-num gbp-completeness">{p.gbp_completeness}%</span>
+                        )}
+                      </td>
+                      <td>
+                        {p.website_kind === 'own' && <span className="badge badge-ok">Site propre</span>}
+                        {p.website_kind === 'none' && (
+                          <span className="badge badge-opportunity">Aucun site</span>
+                        )}
+                        {(p.website_kind === 'booking_platform' ||
+                          p.website_kind === 'social' ||
+                          p.website_kind === 'directory') && (
+                          <span className="badge badge-pending">Ne contrôle pas</span>
+                        )}
+                      </td>
+                      <td>
+                        {emailState === 'pending' && (
+                          <span className="pending-cell">Pas encore traité</span>
+                        )}
+                        {emailState === 'no_email' && (
+                          <span className="badge badge-neutral">Aucune adresse</span>
+                        )}
+                        {emailState === 'has_email' && (
+                          <>
+                            {p.email_status === 'deliverable' && (
+                              <span className="badge badge-ok">Vérifié</span>
+                            )}
+                            {(p.email_status === 'risky' ||
+                              p.email_status === 'pending_verification' ||
+                              p.email_status === 'unknown') && (
+                              <span className="badge badge-pending" title={p.email_status ?? undefined}>
+                                Non garanti
+                              </span>
+                            )}
+                            {(p.email_status === null || p.email_status === 'invalid') && (
+                              <span className="badge badge-neutral">Aucune adresse</span>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="mono-num">
+                        {formatPhoneFR(p.phone)}
+                        {phoneMismatch && (
+                          <span
+                            className="phone-mismatch-marker"
+                            role="img"
+                            aria-label="Le numéro affiché sur le site diffère de celui de la fiche Google"
+                            title="Numéro différent sur le site"
+                          >
+                            {' '}
+                            ⚠
+                          </span>
+                        )}
+                      </td>
+                      <td className="mono-num">{formatDateFR(p.measured_at)}</td>
+                      <td className="mono-num">{formatDateFR(p.delivered_at)}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <select
+                          className="status-select"
+                          value={outcomeToOptionValue(p.outcome)}
+                          onChange={(e) => handleStatusChange(p.id, e.target.value)}
+                          aria-label={`Statut de ${p.business_name}`}
+                        >
+                          {OUTCOME_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <div className="row-actions">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              window.open(diagnosticUrl(p.id), '_blank', 'noopener,noreferrer')
+                            }
+                          >
+                            Voir le diagnostic
+                          </button>
+                          <button type="button" disabled title="Fiche agence — endpoint pas encore confirmé">
+                            Fiche prospect
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="detail-row">
+                        <td colSpan={13}>
+                          <LeadDetailPanel p={p} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Gated on hasLoaded, not loading: this must be absent on the
+              FIRST render specifically (the one hydration checks against),
+              not just while a fetch is in flight. There's nothing
+              meaningful to show before the first load completes anyway —
+              a disabled page-1 button conveys nothing. */}
+          {hasLoaded && (
+            <div className="pagination" aria-label="Pagination">
+              <span className="page-range">
+                {rangeStart}–{rangeEnd} sur {totalCount}
+              </span>
+              <div className="page-buttons">
+                <button
+                  type="button"
+                  disabled={page <= 1 || loading}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  ‹ Précédent
+                </button>
+                {pageWindow(page, totalPages).map((entry, i) =>
+                  entry === 'ellipsis' ? (
+                    <span key={`e${i}`} className="page-ellipsis">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={entry}
+                      type="button"
+                      className={entry === page ? 'active' : undefined}
+                      disabled={loading}
+                      onClick={() => setPage(entry)}
+                    >
+                      {entry}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  disabled={page >= totalPages || loading}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Suivant ›
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+    </Tooltip.Provider>
+  );
+}

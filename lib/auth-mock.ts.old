@@ -1,0 +1,104 @@
+// lib/auth-mock.ts
+//
+// STUB auth layer -- no real Supabase Auth wired up yet. Sets/reads a
+// simple cookie so proxy.ts can gate /app/* the same way real auth
+// would, without a real session behind it. Swap every function here for
+// real Supabase Auth calls when that's wired up -- the pages consuming
+// these don't need to change shape, just what runs inside them.
+//
+// Real handler creates THREE rows on signup: auth.users (Supabase does
+// this automatically), agencies (agency_name, contact_email -- both
+// NOT NULL), and agency_members (the link between the two). The
+// agencies row is the one that's easy to forget -- everything
+// downstream is scoped by agency_id.
+//
+// Tier assignment belongs in this SAME insert, confirmed by Opus --
+// agencies.subscription_tier_id is NOT NULL, so the row can't be created
+// without one:
+//   INSERT INTO agencies (agency_name, contact_email, subscription_tier_id)
+//   VALUES (..., ..., (SELECT id FROM subscription_tiers WHERE tier_name = 'free'))
+// A lookup by tier_name, not a hardcoded uuid -- tier ids differ between
+// the dev and production databases.
+
+// Per Opus: cookies should carry an explicit .hashtaglytics.com domain
+// (leading dot) even while everything runs on one domain -- same
+// behaviour now, no retrofit needed if a subdomain split is ever
+// reconsidered later.
+//
+// Guarded to only apply on the real domain: a cookie's domain attribute
+// must match the page's actual host, or the browser silently rejects
+// the whole assignment -- not a no-op, a cookie that never gets set at
+// all. Hardcoding it unconditionally would break sign-in entirely on
+// localhost during development, with no visible error to explain why.
+function cookieDomainAttr(): string {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname;
+  return host === 'hashtaglytics.com' || host.endsWith('.hashtaglytics.com')
+    ? '; domain=.hashtaglytics.com'
+    : '';
+}
+
+function setCookie(name: string, value: string) {
+  document.cookie = `${name}=${value}; path=/${cookieDomainAttr()}`;
+}
+
+function clearCookie(name: string) {
+  document.cookie = `${name}=; path=/${cookieDomainAttr()}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+export async function signUp(input: {
+  agencyName: string;
+  email: string;
+  password: string;
+}): Promise<{ ok: true }> {
+  // TODO: real handler -- see the file header. Also seeds contact_email
+  // with the same address used for auth.users; they diverge afterwards
+  // (see /app/parametres, which already treats them as separate fields).
+  // eslint-disable-next-line no-console
+  console.log('[stub] signUp called with', { agencyName: input.agencyName, email: input.email }, '-- no real effect.');
+  setCookie('mock_session', '1');
+  // Deliberately NOT setting mock_verified -- signup leaves the agency
+  // unverified until the e-mail link is clicked, matching the real flow.
+  return { ok: true };
+}
+
+export async function signIn(input: { email: string; password: string }): Promise<{ ok: true }> {
+  // Stub: any non-empty credentials "succeed" and are treated as an
+  // already-verified existing account. Real version checks against
+  // Supabase Auth and preserves whatever verified state that account
+  // actually has.
+  // eslint-disable-next-line no-console
+  console.log('[stub] signIn called with', { email: input.email }, '-- no real effect.');
+  setCookie('mock_session', '1');
+  setCookie('mock_verified', '1');
+  return { ok: true };
+}
+
+export async function requestPasswordReset(email: string): Promise<{ ok: true }> {
+  // eslint-disable-next-line no-console
+  console.log('[stub] requestPasswordReset called with', { email }, '-- no real effect.');
+  return { ok: true };
+}
+
+export async function resetPassword(newPassword: string): Promise<{ ok: true }> {
+  // eslint-disable-next-line no-console
+  console.log('[stub] resetPassword called -- no real effect. Length was', newPassword.length);
+  return { ok: true };
+}
+
+export async function resendVerificationEmail(): Promise<{ ok: true }> {
+  return { ok: true };
+}
+
+// Demo-only, not part of the real product: simulates clicking the real
+// verification link, since no real e-mail is ever sent here. Without
+// this there would be no way to reach or test the "verified" side of
+// the redirect rules at all.
+export function demoMarkVerified() {
+  setCookie('mock_verified', '1');
+}
+
+export function signOut() {
+  clearCookie('mock_session');
+  clearCookie('mock_verified');
+}

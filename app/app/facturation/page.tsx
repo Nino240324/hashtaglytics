@@ -1,0 +1,178 @@
+// app/app/facturation/page.tsx
+//
+// Brief 5.5: self-contained, "mechanical" -- current plan, quota used,
+// invoices, Stripe portal link. No new interaction patterns; reuses the
+// progress-bar CSS already built for /app/campagnes/[id] rather than
+// inventing a second one.
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { fetchAgencyPlanUsage, fetchBillingInfo, type AgencyPlanUsage, type BillingInfo } from '@/lib/mock-data';
+
+function formatEur(n: number): string {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n);
+}
+
+function formatDateFR(iso: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+    new Date(iso),
+  );
+}
+
+const INVOICES_PER_PAGE = 12; // roughly one year of monthly billing per page
+
+export default function FacturationPage() {
+  const [billing, setBilling] = useState<BillingInfo | null>(null);
+  const [planUsage, setPlanUsage] = useState<AgencyPlanUsage | null>(null);
+  const [portalStub, setPortalStub] = useState(false);
+  const [invoicePage, setInvoicePage] = useState(1);
+
+  useEffect(() => {
+    fetchBillingInfo().then(setBilling);
+    fetchAgencyPlanUsage().then(setPlanUsage);
+  }, []);
+
+  if (billing === null || planUsage === null) {
+    return <p className="loading-text">Chargement…</p>;
+  }
+
+  const quotaPct =
+    planUsage.max_leads_per_month !== null
+      ? Math.min(
+          100,
+          Math.round((planUsage.leads_delivered_this_period / planUsage.max_leads_per_month) * 100),
+        )
+      : 0;
+
+  const invoiceTotalPages = Math.max(1, Math.ceil(billing.invoices.length / INVOICES_PER_PAGE));
+  const invoiceStart = (invoicePage - 1) * INVOICES_PER_PAGE;
+  const visibleInvoices = billing.invoices.slice(invoiceStart, invoiceStart + INVOICES_PER_PAGE);
+
+  return (
+    <div>
+      <div className="page-head">
+        <h1>Facturation</h1>
+      </div>
+
+      <div className="billing-grid">
+        <section className="billing-section">
+          <h2>Forfait actuel</h2>
+          <div className="billing-card">
+            <div className="billing-card-main">
+              <span className="billing-tier-name">{billing.tierName}</span>
+              <span className="mono-num billing-price">{formatEur(billing.priceEur)} / mois</span>
+            </div>
+            <p className="billing-note">
+              Prochain paiement le {formatDateFR(billing.nextBillingDate)}
+            </p>
+          </div>
+        </section>
+
+        <section className="billing-section">
+          <h2>Quota ce mois-ci</h2>
+          <div className="billing-card">
+            <div
+              className="progress-bar billing-quota-bar"
+              role="progressbar"
+              aria-label="Quota mensuel utilisé"
+              aria-valuenow={quotaPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div className="progress-bar-fill" style={{ width: `${quotaPct}%` }} />
+            </div>
+            <p className="mono-num">
+              {planUsage.leads_delivered_this_period} / {planUsage.max_leads_per_month ?? '∞'} prospects
+              qualifiés
+            </p>
+            <p className="billing-note">
+              Renouvellement du quota le {formatDateFR(billing.nextQuotaResetDate)}
+            </p>
+          </div>
+        </section>
+
+        <section className="billing-section">
+          <h2>Moyen de paiement</h2>
+          <div className="billing-card billing-card-row">
+            <span>
+              {billing.paymentMethodBrand} •••• {billing.paymentMethodLast4}
+            </span>
+          </div>
+        </section>
+      </div>
+
+      <section className="billing-section">
+        <h2>Factures</h2>
+        <div className="billing-invoices-wrap">
+          <table className="billing-invoices-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Montant</th>
+                <th>Statut</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleInvoices.map((inv) => (
+                <tr key={inv.id}>
+                  <td data-label="Date">{formatDateFR(inv.date)}</td>
+                  <td className="mono-num" data-label="Montant">{formatEur(inv.amountEur)}</td>
+                  <td data-label="Statut">
+                    {inv.status === 'paid' && <span className="badge badge-ok">Payée</span>}
+                    {inv.status === 'open' && <span className="badge badge-pending">En attente</span>}
+                    {inv.status === 'failed' && <span className="badge badge-opportunity">Échouée</span>}
+                  </td>
+                  <td data-label="Télécharger">
+                    <span className="billing-invoice-download" aria-disabled="true">
+                      Télécharger
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {invoiceTotalPages > 1 && (
+          <div className="pagination billing-invoices-pagination" aria-label="Pagination des factures">
+            <span className="page-range">
+              {invoiceStart + 1}–{Math.min(invoiceStart + INVOICES_PER_PAGE, billing.invoices.length)}{' '}
+              sur {billing.invoices.length}
+            </span>
+            <div className="page-buttons">
+              <button
+                type="button"
+                disabled={invoicePage <= 1}
+                onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+              >
+                ‹ Précédent
+              </button>
+              <button
+                type="button"
+                disabled={invoicePage >= invoiceTotalPages}
+                onClick={() => setInvoicePage((p) => Math.min(invoiceTotalPages, p + 1))}
+              >
+                Suivant ›
+              </button>
+            </div>
+          </div>
+        )}
+        <p className="billing-stub-note">
+          Le téléchargement de facture n&rsquo;est pas encore câblé.
+        </p>
+      </section>
+
+      <section className="billing-section">
+        <button type="button" className="btn btn-primary" onClick={() => setPortalStub(true)}>
+          Gérer mon abonnement
+        </button>
+        {portalStub && (
+          <p className="billing-stub-note">
+            Le portail de facturation Stripe n&rsquo;est pas encore connecté.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,104 @@
+/* components/site-header.css
+ *
+ * .site-nav/.nav-in/.nav-links/.logo already exist in globals.css and
+ * are untouched. This file adds only what's genuinely new: the
+ * hamburger trigger, backdrop, and drawer for widths below 900px.
+ * Isolated file, imported directly by site-header.tsx, same reasoning
+ * as every other new component this session -- avoids any risk of
+ * colliding with rules already in a file only partially seen.
+ */
+
+.nav-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 22px;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.nav-burger:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .nav-links { display: none; }
+  .nav-burger { display: flex; }
+  /* Keeps the trigger (now showing the close icon) visible and
+     clickable above the drawer that slides in underneath it, rather
+     than being covered by it. */
+  .site-nav { position: relative; z-index: 102; }
+}
+
+.nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 20, 24, .4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 100;
+}
+.nav-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.nav-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 84vw);
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(16, 20, 24, .15);
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  z-index: 101;
+  padding: 68px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.nav-drawer.open { transform: translateX(0); }
+
+.nav-drawer-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--ink);
+}
+.nav-drawer-close:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+.nav-drawer-links { display: flex; flex-direction: column; gap: 2px; }
+.nav-drawer-links a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 4px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration: none;
+}
+.nav-drawer-links a:hover { color: var(--navy); }
+.nav-drawer-links a:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+.nav-drawer-rule { height: 1px; background: var(--rule); margin: 20px 0; flex-shrink: 0; }
+
+.nav-drawer-cta {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}

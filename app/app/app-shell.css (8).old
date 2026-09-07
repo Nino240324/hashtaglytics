@@ -1,0 +1,1588 @@
+/* app/app/app-shell.css */
+
+/* ═══════════════════════════════════════════════════════════════════
+   APP SHELL — sidebar + main content, shared by every /app/* screen.
+   Uses the same design tokens as globals.css (--navy, --sky, --ink,
+   --wash, --rule, --bad, --ok, --star). Imported only inside the /app
+   segment, so the public site's globals.css is untouched.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--wash);
+}
+
+.app-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid var(--rule);
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  /* Sticky + bounded height, not stretched to match .app-main's height --
+     without this, a long table (e.g. 40 prospects) pushes the sidebar's
+     own bottom-anchored items (sign-out, retour au site) far below the
+     visible viewport, reachable only after scrolling the whole page. */
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.app-sidebar .logo { margin-bottom: 36px; }
+
+.app-nav { display: flex; flex-direction: column; gap: 4px; }
+.app-nav-link {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font-size: var(--t-small);
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: background .12s ease, color .12s ease;
+}
+.app-nav-link:hover { background: var(--wash); color: var(--ink); }
+.app-nav-link:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.app-nav-link.active { background: var(--navy); color: #fff; }
+
+.app-sidebar .foot-link {
+  padding-top: 14px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  text-decoration: none;
+}
+.app-sidebar .foot-link:hover { color: var(--ink); }
+
+.app-main { flex: 1; min-width: 0; padding: 40px 44px; position: relative; }
+
+/* Single shared sign-out, rendered once in layout.tsx -- positioned to
+   sit top-right on every /app/* page via CSS alone, rather than needing
+   to be added inside each page's own markup. */
+.app-signout-top {
+  position: absolute;
+  top: 40px;
+  right: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: "IBM Plex Mono", monospace;
+}
+.app-signout-top:hover { color: var(--navy); }
+.app-signout-top:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.app-signout-top span { font-size: 17px; }
+
+/* ── Lead quota stat (used in the /app/campagnes and /app/prospects
+     placements — no global header, so no wrapper rule here) ──────────── */
+
+.lead-quota-stat {
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+button.lead-quota-stat { cursor: pointer; }
+button.lead-quota-stat:hover,
+button.lead-quota-stat:focus-visible { color: var(--ink); }
+.lead-quota-warning { color: #8A6A1F; font-weight: 600; }
+.lead-quota-at-limit { color: var(--bad); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .app-shell { flex-direction: column; }
+  .app-sidebar { display: none; }
+  .app-main { padding: 24px 20px; }
+  /* Hidden, not repositioned, at this width -- its role is now fully
+     covered by the drawer's own déconnexion entry below, and keeping
+     both would just be two sign-out affordances on the same screen. */
+  .app-signout-top { display: none; }
+  .page-head h1 { overflow-wrap: break-word; }
+
+  /* .status-tabs-stats previously had white-space:nowrap with no way to
+     shrink, forcing the whole row -- and with it the whole page -- wider
+     than the viewport (the bug Opus flagged). min-width:0 alone isn't
+     enough on its own: without also allowing wrap, the text would just
+     overflow its own box instead of the page. Letting the row wrap so
+     this drops to its own line, and letting the text itself wrap there,
+     is the actual fix. */
+  .status-tabs-row { flex-wrap: wrap; }
+}
+
+/* ── Mobile app bar + drawer (below 900px) ───────────────────────────
+   Separate component and separate state from SiteHeader's drawer --
+   this is the dashboard's own nav, not shared with the public site.
+   Portaled to document.body (same as SiteHeader), sidestepping any
+   containing-block issues from ancestors rather than risking the same
+   mispositioning bug found there. */
+
+.app-topbar {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+@media (max-width: 900px) {
+  .app-topbar { display: flex; }
+}
+.app-topbar-burger {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.app-topbar-burger:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.app-topbar-title { font-size: 17px; font-weight: 600; color: var(--ink); }
+
+.app-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 20, 24, .4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 200;
+}
+.app-drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.app-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(300px, 84vw);
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(16, 20, 24, .15);
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  z-index: 201;
+  padding: 68px 22px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.app-drawer.open { transform: translateX(0); }
+
+.app-drawer-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--ink);
+}
+.app-drawer-close:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+.app-drawer-links { display: flex; flex-direction: column; gap: 2px; }
+.app-drawer-links a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 10px;
+  border-radius: 7px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.app-drawer-links a:hover { background: var(--wash); color: var(--ink); }
+.app-drawer-links a:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+.app-drawer-links a.active { background: var(--navy); color: #fff; }
+
+.app-drawer-rule { height: 1px; background: var(--rule); margin: 18px 0; flex-shrink: 0; }
+
+.app-drawer-signout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  text-align: left;
+  font-family: inherit;
+}
+.app-drawer-signout:hover { color: var(--navy); }
+.app-drawer-signout:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+.app-drawer-back {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px;
+  font-size: 14px;
+  color: var(--ink-faint);
+  text-decoration: none;
+}
+.app-drawer-back:hover { color: var(--ink); }
+.app-drawer-back:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+/* ── Prospects screen ─────────────────────────────────────────────── */
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+.page-head h1 { font-size: var(--t-h1); font-weight: 600; letter-spacing: -.03em; }
+.page-head .count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: var(--t-label);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.status-tabs-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.status-tabs {
+  display: flex;
+  gap: 22px;
+  overflow-x: auto;
+  min-width: 0;
+}
+.status-tabs-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  white-space: nowrap;
+}
+.status-tabs-stats > *:not(:last-child) { position: relative; }
+.status-tabs-stats > *:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+.filtered-count { font-size: 12px; color: var(--ink-faint); }
+
+/* Placed after both base rules above, not in the earlier general mobile
+   block -- .status-tabs already sets overflow-x and .status-tabs-stats
+   already sets white-space there, both at equal specificity. Placed
+   earlier in the file (as these originally were), they'd be silently
+   overridden by these later base rules for any width matching both
+   this and that block's query -- same class of bug as .detail-panel's,
+   found by auditing for it rather than only fixing the one reported
+   case. Currently invisible in practice (flex-wrap alone already
+   produces the right visual result independent of these two
+   properties), but wrong regardless of whether it currently shows. */
+@media (max-width: 900px) {
+  .status-tabs { flex-wrap: wrap; overflow-x: visible; row-gap: 8px; }
+  .status-tabs-stats { white-space: normal; flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+  .status-tabs-stats > *:not(:last-child)::after { display: none; }
+}
+.status-tabs button {
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.005em;
+  padding: 10px 2px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.status-tabs button .n {
+  margin-left: 6px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .65;
+}
+.status-tabs button:hover { color: var(--ink); }
+.status-tabs button.active { color: var(--navy); border-bottom-color: var(--navy); }
+.status-tabs button:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+.filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 22px;
+}
+.filter-group { display: flex; flex-direction: column; gap: 6px; }
+.filter-group label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.filter-group select,
+.filter-group input[type="search"] {
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-size: var(--t-small);
+  color: var(--ink);
+  background: #fff;
+}
+.filter-group input[type="search"] { min-width: 220px; }
+.filter-group select:focus-visible,
+.filter-group input:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: 2px;
+  border-color: var(--navy);
+}
+.filters-bar .reset-btn {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--navy);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 9px 0;
+}
+.filters-bar .reset-btn:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+.prospect-table-wrap {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: auto;
+  background: #fff;
+}
+table.prospect-table { width: 100%; border-collapse: collapse; min-width: 1040px; }
+.prospect-table th {
+  text-align: left;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 12px 14px;
+  background: var(--wash);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.prospect-table th button {
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+}
+.prospect-table th button:hover { color: var(--ink); }
+.prospect-table th button:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.th-cluster { display: inline-flex; align-items: center; gap: 5px; }
+.info-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--t-label);
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.info-trigger:hover { color: var(--navy); }
+.info-trigger:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; border-radius: 2px; }
+.info-tooltip-content {
+  max-width: 280px;
+  background: var(--ink);
+  color: #fff;
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 12px 14px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 20, 24, .18);
+  z-index: 50;
+}
+.info-tooltip-arrow { fill: var(--ink); }
+.prospect-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-small);
+  vertical-align: middle;
+}
+/* Scoped to this table specifically -- .badge is shared with
+   /app/facturation and the campaign leads table, neither of which was
+   flagged as too small, so the base class stays untouched. */
+.prospect-table .badge { font-size: 12px; padding: 5px 9px; }
+.prospect-table tr:last-child td { border-bottom: none; }
+.prospect-table tbody tr:hover td { background: var(--wash); }
+.prospect-table tbody tr[role="button"] { cursor: pointer; }
+.prospect-table tbody tr[role="button"]:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+.prospect-table tr.row-expanded td { background: var(--wash); border-bottom-color: var(--rule); }
+
+.expand-chevron {
+  display: inline-block;
+  width: 14px;
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1;
+}
+.biz-row { display: flex; align-items: center; gap: 6px; }
+
+.detail-row td { padding: 0; background: #fff; cursor: default; }
+.detail-row:hover td { background: #fff; }
+.detail-panel {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--wash);
+}
+@media (max-width: 1200px) {
+  .detail-panel { grid-template-columns: repeat(2, 1fr); }
+}
+/* Placed after the 1200px rule specifically -- same specificity, so
+   source order decides the winner at any width matching both (375px
+   matches both 900px and 1200px). Placed before this, it was silently
+   overridden and never actually applied. */
+@media (max-width: 900px) {
+  .detail-panel { grid-template-columns: 1fr; gap: 20px; }
+}
+.detail-group-title {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--navy);
+  margin-bottom: 10px;
+}
+.detail-group dl { display: flex; flex-direction: column; gap: 9px; }
+.detail-field dt {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+.detail-field dd { font-size: 13px; color: var(--ink); line-height: 1.5; overflow-wrap: break-word; }
+.verbatim { font-style: italic; }
+.meta-length { font-style: normal; font-size: 11px; color: var(--ink-faint); }
+.detail-note { margin-top: 10px; font-size: 12px; color: var(--ink-faint); font-style: italic; }
+
+.cell-name .biz { font-weight: 600; color: var(--ink); letter-spacing: -.005em; }
+.cell-name .loc { margin-top: 2px; font-size: 12.5px; color: var(--ink-faint); }
+.mono-num { font-family: "IBM Plex Mono", monospace; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.badge-ok { background: rgba(24, 121, 78, .08); color: var(--ok); border: 1px solid rgba(24, 121, 78, .2); }
+.badge-opportunity { background: var(--bad-wash); color: var(--bad); border: 1px solid #F3D5D0; }
+.badge-pending { background: rgba(224, 163, 46, .12); color: #8A6A1F; border: 1px solid rgba(224, 163, 46, .35); }
+.badge-neutral { background: var(--wash); color: var(--ink-soft); border: 1px solid var(--rule); }
+
+.stars-row { color: var(--star); font-size: 13px; letter-spacing: 1px; }
+.no-rating { color: var(--ink-faint); font-size: 14px; }
+
+/* Three-state cells (brief 7): "Pas encore traite" is a PENDING state --
+   grey italic mono, visually distinct from a finding (a normal badge). */
+.pending-cell {
+  font-family: "IBM Plex Mono", monospace;
+  font-style: italic;
+  color: var(--ink-faint);
+  font-size: 14px;
+}
+
+.gbp-completeness {
+  margin-left: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.phone-mismatch-marker {
+  color: var(--star);
+  cursor: help;
+}
+
+.status-select {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+.status-select:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+.row-actions { display: flex; gap: 6px; flex-wrap: nowrap; }
+.row-actions button {
+  border: 1px solid var(--rule);
+  background: #fff;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.row-actions button:hover:not(:disabled) { border-color: var(--navy); color: var(--navy); }
+.row-actions button:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.row-actions button:disabled { opacity: .4; cursor: not-allowed; }
+
+.empty-state { padding: 64px 24px; text-align: center; color: var(--ink-soft); }
+.empty-state h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.empty-state p { max-width: 44ch; margin: 0 auto 18px; }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.pagination .page-range {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--ink-faint);
+}
+.page-buttons { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.page-buttons button {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--rule);
+  background: #fff;
+  color: var(--ink-soft);
+  padding: 7px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 34px;
+}
+.page-buttons button:hover:not(:disabled) { border-color: var(--navy); color: var(--navy); }
+.page-buttons button:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.page-buttons button.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+.page-buttons button:disabled { opacity: .4; cursor: not-allowed; }
+.page-ellipsis { color: var(--ink-faint); padding: 0 4px; font-family: "IBM Plex Mono", monospace; }
+
+/* ── Campagnes screen (v2 — cards, not a table) ─────────────────────── */
+
+.loading-text { color: var(--ink-faint); font-size: var(--t-small); padding: 24px 0; }
+
+/* ── /app/parametres ─────────────────────────────────────────────────── */
+
+/* Hidden by default, visible only below 900px -- this page's own
+   layout already stacks cleanly at mobile widths, but logo upload,
+   colour picking, and the live masthead preview aren't practical on a
+   phone regardless, per the mobile spec's scoping decision. */
+.desktop-work-notice {
+  display: none;
+}
+@media (max-width: 900px) {
+  .desktop-work-notice {
+    display: block;
+    margin: 0 0 24px;
+    padding: 12px 16px;
+    background: var(--wash);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+}
+
+.settings-page-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 560px) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .settings-page-grid { grid-template-columns: 1fr; }
+}
+.settings-left-col { display: flex; flex-direction: column; }
+
+.settings-section { margin-bottom: 40px; }
+.settings-section.settings-narrow { max-width: 560px; }
+.settings-section h2 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+.settings-card {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 26px 28px;
+}
+.settings-card .filter-group { margin-bottom: 18px; display: flex; flex-direction: column; gap: 6px; }
+.settings-card .filter-group:last-of-type { margin-bottom: 20px; }
+/* Ma marque specifically: more room between fields so this card's total
+   height grows toward matching Mon compte + Mot de passe stacked
+   together, rather than ending well above them and leaving the right
+   column visibly shorter. */
+.settings-brand-form-col .settings-card .filter-group { margin-bottom: 46px; }
+.settings-brand-form-col .settings-card .filter-group:last-of-type { margin-bottom: 30px; }
+.settings-card .filter-group label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.settings-card input[type="text"],
+.settings-card input[type="email"],
+.settings-card input[type="tel"],
+.settings-card input[type="password"] {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  padding: 10px 13px;
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-size: 15px;
+}
+.settings-card input:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
+.settings-card input[type="file"] { font-size: 13.5px; color: var(--ink-soft); }
+
+.settings-hint { font-size: 12.5px; color: var(--ink-faint); margin-top: 6px; }
+.settings-error-note {
+  font-size: 12.5px;
+  color: var(--bad);
+  margin-top: 6px;
+}
+.settings-warning-note {
+  font-size: 12.5px;
+  color: #8A6A1F;
+  background: rgba(224, 163, 46, .1);
+  border: 1px solid rgba(224, 163, 46, .3);
+  border-radius: 6px;
+  padding: 8px 11px;
+  margin-top: 8px;
+}
+.settings-stub-note {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.colour-palette { display: flex; gap: 8px; margin-bottom: 14px; }
+.colour-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.colour-swatch:hover { transform: scale(1.1); }
+.colour-swatch.selected { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }
+.colour-swatch:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+.settings-brand-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 480px) minmax(380px, 560px);
+  gap: 40px;
+  align-items: start;
+  max-width: 1200px;
+}
+@media (max-width: 900px) {
+  .settings-brand-grid { grid-template-columns: 1fr; }
+}
+.settings-brand-form-col { min-width: 0; }
+
+.settings-preview-wrap h3 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+/* Modelled on the real PDF masthead (server.js: .band, .logo-box,
+   .logo-text, .doc-ref) -- proportions approximated for screen, not a
+   generic colour swatch. */
+.masthead-preview {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(16, 20, 24, .06);
+}
+.masthead-preview-band { height: 10px; }
+.masthead-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26px 30px;
+  border-bottom: 1px solid var(--rule);
+}
+.masthead-preview-logo { height: 52px; display: flex; align-items: center; }
+.masthead-preview-logo img { max-height: 100%; max-width: 220px; object-fit: contain; }
+.masthead-preview-logo span { font-size: 25px; font-weight: 700; letter-spacing: -.02em; }
+.masthead-preview-docref {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: right;
+  line-height: 1.7;
+}
+.settings-preview-wrap .settings-hint { margin-top: 12px; }
+
+/* ── /app/facturation ────────────────────────────────────────────────── */
+
+.billing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+}
+.billing-section { margin-bottom: 40px; }
+.billing-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+.billing-card {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 26px 28px;
+}
+.billing-card-row { display: flex; align-items: center; }
+.billing-card-row span { font-size: 17px; font-weight: 500; }
+.billing-card-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.billing-tier-name { font-size: 24px; font-weight: 600; letter-spacing: -.015em; }
+.billing-price { font-size: 16px; color: var(--ink-soft); }
+.billing-note { font-size: 13.5px; color: var(--ink-faint); }
+.billing-quota-bar { height: 12px; margin-bottom: 14px; }
+.billing-card .mono-num { display: block; margin-bottom: 6px; font-size: 17px; font-weight: 500; }
+
+/* overflow:auto, not hidden -- matches prospect-table-wrap and
+   campaign-leads-table-wrap. Table cells have an intrinsic minimum
+   width from their own content (a date string, "Télécharger", a status
+   badge) regardless of the table's own width:100% -- at narrow
+   viewports the four columns' combined minimum content width exceeds
+   what's available, and overflow:hidden was clipping that silently
+   instead of scrolling. min-width gives it a clean scroll threshold
+   rather than an awkward squish right at the edge. */
+.billing-invoices-wrap { border: 1px solid var(--rule); border-radius: 12px; overflow: auto; background: #fff; }
+table.billing-invoices-table { width: 100%; border-collapse: collapse; min-width: 480px; }
+.billing-invoices-table th {
+  text-align: left;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 14px 20px;
+  background: var(--wash);
+  border-bottom: 1px solid var(--rule);
+}
+.billing-invoices-table td { padding: 16px 20px; border-bottom: 1px solid var(--rule); font-size: 15px; }
+.billing-invoices-pagination { margin-top: 16px; }
+.billing-invoices-pagination .page-range { font-size: 13px; }
+.billing-invoices-pagination .page-buttons button { font-size: 13.5px; padding: 8px 13px; }
+.billing-invoices-table tr:last-child td { border-bottom: none; }
+.billing-invoice-download { color: var(--ink-faint); font-size: 14px; cursor: not-allowed; }
+.billing-stub-note { margin-top: 12px; font-size: 13px; color: var(--ink-faint); font-style: italic; }
+
+/* Mobile: data-label + CSS, not a separate card component -- four
+   fields is simple enough to keep one markup tree, per the mobile
+   spec's own instruction for this specific table (unlike the
+   thirteen-column prospects table, which genuinely needed one). Each
+   row becomes a 2x2 grid (Date+Montant, Statut+Télécharger), matching
+   the spec's own mockup layout rather than a plain four-line stack. */
+@media (max-width: 700px) {
+  .billing-invoices-wrap { border: none; overflow: visible; background: none; }
+  table.billing-invoices-table { min-width: 0; }
+  .billing-invoices-table thead { display: none; }
+  .billing-invoices-table,
+  .billing-invoices-table tbody { display: block; width: 100%; }
+  .billing-invoices-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 16px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: #fff;
+  }
+  .billing-invoices-table tr:last-child { margin-bottom: 0; }
+  .billing-invoices-table td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+    font-size: 15px;
+  }
+  .billing-invoices-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 3px;
+  }
+  /* The one thing anyone would actually tap on this row (per the spec)
+     -- still functionally disabled, matching the honest stub state
+     everywhere else, but visually more like a real button here so it
+     reads as the row's clear action rather than a fourth plain value. */
+  .billing-invoice-download {
+    display: inline-block;
+    padding: 6px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    font-size: 13px;
+  }
+}
+
+/* ── /app/campagnes/[id] — progress screen ──────────────────────────── */
+
+.campaign-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 32px;
+  font-size: 15px;
+}
+.campaign-detail-meta .badge { font-size: 12.5px; padding: 5px 10px; }
+
+/* Phase 1: nothing to report yet. CSS-only, per the brief -- no JS-driven
+   visual effects. prefers-reduced-motion turns the animation off but
+   leaves the robots themselves visible, never a blank page. */
+.scan-pending { padding: 48px 24px; text-align: center; }
+.scan-pending-illustration {
+  height: 70px;
+  margin: 0 auto 20px;
+  max-width: 320px;
+  overflow: hidden;
+  /* Fades the marching line at both edges instead of a hard clip --
+     reads like a film strip rather than a cropped screenshot. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+}
+.scan-robot-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+  width: max-content;
+  height: 100%;
+  animation: scan-track-scroll 9s linear infinite;
+}
+@keyframes scan-track-scroll {
+  /* Starts shifted left, animates back to 0 -- the track itself moves
+     rightward, which makes the robots appear to enter from the left and
+     exit to the right. The seam math is unchanged (still exactly half
+     the doubled track's width), just run in reverse. */
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
+.scan-robot {
+  width: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  animation: scan-robot-bounce 1.1s ease-in-out infinite;
+}
+.scan-robot:nth-child(odd) { animation-delay: 0s; }
+.scan-robot:nth-child(even) { animation-delay: .18s; }
+@keyframes scan-robot-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.scan-robot-antenna {
+  width: 2px;
+  height: 7px;
+  background: var(--ink-faint);
+  position: relative;
+}
+.scan-robot-antenna::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--sky);
+}
+.scan-robot-head {
+  width: 20px;
+  height: 15px;
+  background: var(--navy);
+  border-radius: 5px 5px 3px 3px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.scan-robot-eye { width: 4px; height: 4px; border-radius: 50%; background: var(--sky); }
+.scan-robot-body {
+  width: 26px;
+  height: 16px;
+  background: var(--navy-deep);
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-robot-track { animation: none; }
+  .scan-robot { animation: none; }
+  /* One clean row instead of the marching loop's doubled set -- a
+     static illustration should look deliberate, not like a duplicate
+     bug. */
+  .scan-robot:nth-child(n+6) { display: none; }
+}
+.scan-pending-text { color: var(--ink-soft); font-size: var(--t-small); }
+
+/* Shared base for any progress bar on /app/* -- used here and on
+   /app/facturation. .scan-progress-bar below duplicates these same values
+   for its own specific class (kept as-is, unchanged, to avoid touching
+   already-shipped CSS); harmless redundancy, not a conflict. */
+.progress-bar { height: 10px; background: var(--wash); border-radius: 6px; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: var(--navy); border-radius: 6px; transition: width .4s ease; }
+
+/* Phase 2: a real bar for the scan stage only. */
+.scan-progress { margin-bottom: 20px; }
+.scan-progress-bar { height: 10px; background: var(--wash); border-radius: 6px; overflow: hidden; }
+.scan-progress-bar .progress-bar-fill {
+  height: 100%;
+  background: var(--navy);
+  border-radius: 6px;
+  transition: width .4s ease;
+}
+.scan-progress-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.scan-businesses { color: var(--ink-faint); }
+
+/* Qualification/enrichment: two ticks, not a second bar -- those stages
+   are closer to started/finished, and a bar implying granularity that
+   isn't there is worse than none. */
+.scan-stage-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-bottom: 36px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+@media (max-width: 560px) {
+  /* Four items ("Balayage", "Qualification 26", etc.) plus three 24px
+     gaps adds up to roughly 560-640px at this font size -- estimated
+     from the CSS, not measured on a real render, which is exactly the
+     kind of number this fix needs a real-device check against. */
+  .scan-stage-ticks { gap: 14px 24px; }
+}
+.scan-tick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15.5px;
+  color: var(--ink-faint);
+}
+.scan-tick.active { color: var(--ink-soft); }
+.scan-tick.done { color: var(--ok); }
+.scan-tick-icon { font-size: 15px; }
+.scan-tick-count { color: var(--ink-faint); font-size: 14px; }
+
+.campaign-leads { margin-top: 8px; }
+.campaign-leads-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.campaign-leads-head h2 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.campaign-leads-head a { font-size: 15px; color: var(--navy); text-decoration: none; }
+.campaign-leads-head a:hover { text-decoration: underline; }
+
+.campaign-leads-table-wrap { border: 1px solid var(--rule); border-radius: 10px; overflow: auto; background: #fff; }
+table.campaign-leads-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+.campaign-leads-table th {
+  text-align: left;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 11px 14px;
+  background: var(--wash);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.campaign-leads-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-small);
+  vertical-align: middle;
+}
+.campaign-leads-table tr:last-child td { border-bottom: none; }
+.campaign-leads-table tbody tr:hover td { background: var(--wash); }
+
+/* Mobile: same data-label + CSS approach as the invoice table -- this
+   table is read-only (no expandable detail, no interactive dropdown,
+   Statut is a static badge), so it's genuinely closer in complexity to
+   that four-column table than to the prospects table's thirteen
+   columns, despite covering seven fields here. Confirmed by reading the
+   actual row markup before assuming, not from the field count alone. */
+@media (max-width: 700px) {
+  .campaign-leads-table-wrap { border: none; overflow: visible; background: none; }
+  table.campaign-leads-table { min-width: 0; }
+  .campaign-leads-table thead { display: none; }
+  .campaign-leads-table,
+  .campaign-leads-table tbody { display: block; width: 100%; }
+  .campaign-leads-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: #fff;
+  }
+  .campaign-leads-table tr:last-child { margin-bottom: 0; }
+  .campaign-leads-table td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+    font-size: 15px;
+    vertical-align: initial;
+  }
+  /* Entreprise spans both columns, no data-label -- the business name
+     and city (already its own biz/loc structure) don't need a separate
+     label the way a bare position number or badge does. */
+  .campaign-leads-table td.cell-name {
+    grid-column: 1 / -1;
+    padding-bottom: 10px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .campaign-leads-table td:not(.cell-name)::before {
+    content: attr(data-label);
+    display: block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 3px;
+  }
+  /* Hover state is a desktop-only affordance; reset so a tap doesn't
+     leave a lingering highlighted background on a touch device. */
+  .campaign-leads-table tbody tr:hover td { background: none; }
+}
+
+.campaigns-empty-state { padding: 96px 24px; }
+.campaigns-empty-state h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.campaigns-empty-state p { margin: 0 auto 24px; }
+.campaigns-empty-state .btn { display: inline-flex; }
+
+.campagnes-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.campagnes-toolbar-stats { display: flex; align-items: center; gap: 14px; }
+.campagnes-toolbar-stats .campaign-quota::after {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--rule);
+  margin-left: 14px;
+  vertical-align: middle;
+}
+.campaign-quota { font-size: var(--t-small); color: var(--ink-soft); }
+.campaign-quota.at-limit { color: #8A6A1F; font-weight: 600; }
+
+.btn.is-disabled {
+  background: var(--wash);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  cursor: not-allowed;
+}
+/* Hover feedback even though it's non-interactive -- the cursor arriving
+   should be visible, "disabled" isn't the same as "dead". */
+.btn.is-disabled:hover { background: var(--rule); color: var(--ink); transform: none; }
+
+/* Same hover language as .campaign-card: a border that shows up on
+   hover/focus, not a static button. Scoped to this specific button (not
+   a bare .btn-primary override) so it doesn't leak onto the modal's
+   submit button or the empty-state CTA, which weren't part of this ask.
+   Transparent at rest, not absent -- box-sizing:border-box means adding
+   it doesn't shift the button's size when it appears. */
+.btn-toolbar-cta { border: 1px solid transparent; }
+.btn-toolbar-cta:hover,
+.btn-toolbar-cta:focus-visible { border-color: var(--ink); }
+.btn-toolbar-cta.is-disabled:hover,
+.btn-toolbar-cta.is-disabled:focus-visible { border-color: var(--ink); }
+
+/* At 375px the button ("+ Nouvelle campagne") takes up most of the row
+   on its own, squeezing .campagnes-toolbar-stats into a narrow column
+   where "5 / 6 campagnes actives" word-wraps into three cramped lines
+   right next to it -- not a nowrap bug like the earlier ones, just not
+   enough room for both side by side. Button drops to its own full-width
+   line below instead, giving the stats the full viewport width to wrap
+   naturally across at most two lines. */
+@media (max-width: 900px) {
+  .campagnes-toolbar { flex-wrap: wrap; gap: 16px; }
+  .campagnes-toolbar-stats { flex-wrap: wrap; row-gap: 6px; }
+  .campagnes-toolbar-stats .campaign-quota::after { display: none; }
+  .btn-toolbar-cta { width: 100%; text-align: center; }
+}
+
+.campaign-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+.campaign-card-link { text-decoration: none; color: inherit; display: block; }
+.campaign-card-link:focus-visible .campaign-card { outline: 2px solid var(--sky); outline-offset: 2px; }
+.campaign-card {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 18px 20px;
+  height: 100%;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.campaign-card-link:hover .campaign-card {
+  border-color: var(--navy);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 20, 24, .1);
+}
+.campaign-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.campaign-card-keyword { font-size: 17px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 4px; }
+.campaign-card-town { font-size: var(--t-small); color: var(--ink-soft); margin-bottom: 12px; }
+.campaign-card-stats { font-size: 13px; color: var(--ink-soft); margin-bottom: 4px; }
+.campaign-card-pct { color: var(--ink-faint); }
+.campaign-card-date { font-size: 12px; color: var(--ink-faint); }
+
+/* ── ⋯ menu ──────────────────────────────────────────────────────────── */
+
+.campaign-menu { position: relative; }
+.campaign-menu-trigger {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ink-faint);
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.campaign-menu-trigger:hover { background: var(--wash); color: var(--ink); }
+.campaign-menu-trigger:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.campaign-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 20, 24, .12);
+  min-width: 140px;
+  padding: 4px;
+}
+.campaign-menu-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.campaign-menu-list button:disabled { color: var(--ink-faint); cursor: not-allowed; }
+.campaign-menu-list button:not(:disabled):hover { background: var(--wash); }
+
+/* ── Modal ───────────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 27, 54, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.modal-dialog {
+  background: #fff;
+  border-radius: 12px;
+  max-width: 460px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(16, 20, 24, .25);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.modal-header h2 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.modal-close:hover { background: var(--wash); color: var(--ink); }
+.modal-close:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.modal-body { padding: 24px; }
+.modal-body .filter-group { margin-bottom: 18px; display: flex; flex-direction: column; gap: 6px; }
+.modal-body .filter-group label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.modal-body input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-size: var(--t-small);
+}
+.modal-body input:disabled { background: var(--wash); color: var(--ink-faint); }
+
+.campaign-confirmation {
+  margin-top: 14px;
+  font-size: 13.5px;
+  color: var(--ok);
+  background: rgba(24, 121, 78, .07);
+  border: 1px solid rgba(24, 121, 78, .2);
+  border-radius: 7px;
+  padding: 10px 14px;
+}
+
+/* ── Commune autocomplete ────────────────────────────────────────────── */
+
+.commune-autocomplete { display: flex; flex-direction: column; gap: 6px; }
+.commune-autocomplete label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.commune-autocomplete-popover {
+  width: var(--radix-popover-trigger-width);
+  z-index: 200; /* above the modal backdrop/dialog (z-index 100) */
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 20, 24, .16);
+  padding: 4px;
+}
+.commune-autocomplete-list {
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.commune-autocomplete-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.commune-autocomplete-list li.highlighted,
+.commune-autocomplete-list li:hover { background: var(--wash); }
+.commune-name { font-weight: 500; color: var(--ink); }
+.commune-dept { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-faint); }
+.commune-region { margin-left: auto; font-size: 12px; color: var(--ink-faint); }
+.commune-autocomplete-truncated {
+  padding: 8px 10px 4px;
+  margin: 0;
+  border-top: 1px solid var(--rule);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+
+/* ── /app/prospects mobile card + Filtres sheet (below 900px) ────────
+   Reuses existing classes where they already exist and apply directly
+   (.expand-chevron, .status-select, .badge variants, .mono-num,
+   .stars-row, .no-rating, .filter-group, .pending-cell) -- only
+   genuinely new layout is defined here. */
+
+.prospect-card-list { display: flex; flex-direction: column; gap: 12px; }
+
+.prospect-card {
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.prospect-card.expanded { border-color: var(--navy); }
+
+.prospect-card-summary {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+.prospect-card-summary:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+.prospect-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.prospect-card-name-block { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.prospect-card-name-block .biz { font-weight: 600; font-size: 16px; color: var(--ink); }
+.prospect-card-name-block .loc { font-size: 13px; color: var(--ink-faint); margin-top: 2px; }
+.prospect-card-potentiel { font-size: 20px; font-weight: 600; color: var(--ink); flex-shrink: 0; }
+
+.prospect-card-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.prospect-card-position { font-size: 14px; color: var(--ink-soft); }
+
+.prospect-card-bottom {
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  margin-top: 14px;
+}
+.prospect-card-bottom .status-select { min-height: 40px; }
+
+.prospect-card-detail {
+  border-top: 1px solid var(--rule);
+  padding: 16px;
+  background: var(--wash);
+}
+.prospect-card-actions { display: flex; gap: 10px; margin-top: 16px; }
+.prospect-card-actions button {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.prospect-card-actions button:hover:not(:disabled) { border-color: var(--navy); color: var(--navy); }
+.prospect-card-actions button:disabled { color: var(--ink-faint); cursor: not-allowed; }
+
+/* Filtres trigger + sheet -- same portal/backdrop/focus-trap pattern as
+   the two nav drawers, bottom sheet rather than side drawer. */
+.filtres-trigger-row { margin-bottom: 20px; }
+.filtres-trigger { width: 100%; min-height: 44px; justify-content: center; }
+
+.filtres-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 20, 24, .4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 300;
+}
+.filtres-sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.filtres-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 85vh;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 32px rgba(16, 20, 24, .15);
+  transform: translateY(100%);
+  transition: transform .25s ease;
+  z-index: 301;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.filtres-sheet.open { transform: translateY(0); }
+
+.filtres-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+.filtres-sheet-head h2 { font-size: 18px; font-weight: 600; }
+.filtres-sheet-close {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--ink);
+}
+.filtres-sheet-close:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+.filtres-sheet-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+/* Explicit floor, not trusting .filter-group's own desktop padding to
+   already clear 44px -- close (9px x2 + line-height) but not certain
+   without seeing it rendered, so guaranteeing the tap-target size here
+   rather than assuming. */
+.filtres-sheet-body select,
+.filtres-sheet-body input { min-height: 44px; }
+
+.filtres-sheet-actions {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+.filtres-sheet-actions .btn { flex: 1; justify-content: center; min-height: 44px; }

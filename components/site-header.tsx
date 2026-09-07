@@ -1,0 +1,173 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import Link from 'next/link';
+import { isSignedIn } from '@/lib/auth-mock';
+import './site-header.css';
+
+const NAV_ITEMS = [
+  { href: '/#produit', label: 'Le produit' },
+  { href: '/#methode', label: 'M\u00e9thode' },
+  { href: '/#interface', label: 'L\u2019interface' },
+  { href: '/#documents', label: 'Documents' },
+  { href: '/tarifs', label: 'Tarifs' },
+] as const;
+
+export function SiteHeader() {
+  const [open, setOpen] = useState(false);
+  // Checked once on mount, client-side only -- matches the cookie's own
+  // client-readable nature. A signed-in visitor landing on the public
+  // site (e.g. via "Retour au site" from the dashboard) shouldn't be
+  // sent back through the login form; they should go straight back in.
+  const [signedIn, setSignedIn] = useState(false);
+  // Portal target only exists client-side, after mount -- rendering the
+  // portal before that would fail during server rendering, since
+  // document.body doesn't exist there.
+  const [mounted, setMounted] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const firstLinkRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    setSignedIn(isSignedIn());
+  }, []);
+
+  function closeDrawer() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  useEffect(() => {
+    if (open) firstLinkRef.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') closeDrawer();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleTab(e: KeyboardEvent) {
+      if (e.key !== 'Tab' || !drawerRef.current) return;
+      const focusable = drawerRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener('keydown', handleTab);
+    return () => document.removeEventListener('keydown', handleTab);
+  }, [open]);
+
+  const drawerContent = (
+    <>
+      <div className={`nav-backdrop${open ? ' open' : ''}`} onClick={closeDrawer} aria-hidden="true" />
+      <div
+        id="site-nav-drawer"
+        ref={drawerRef}
+        className={`nav-drawer${open ? ' open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        aria-hidden={!open}
+      >
+        <button
+          type="button"
+          className="nav-drawer-close"
+          aria-label="Fermer le menu"
+          onClick={closeDrawer}
+          tabIndex={open ? 0 : -1}
+        >
+          <span aria-hidden="true">{'\u2715'}</span>
+        </button>
+        <div className="nav-drawer-links">
+          {NAV_ITEMS.map((item, i) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              ref={i === 0 ? firstLinkRef : undefined}
+              tabIndex={open ? 0 : -1}
+              onClick={closeDrawer}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+        <div className="nav-drawer-rule" />
+        <Link
+          href={signedIn ? '/app/prospects' : '/connexion'}
+          className="btn btn-primary nav-drawer-cta"
+          tabIndex={open ? 0 : -1}
+          onClick={closeDrawer}
+        >
+          {signedIn ? 'Mon espace' : 'Connexion'}
+        </Link>
+      </div>
+    </>
+  );
+
+  return (
+    <nav className="site-nav">
+      <div className="wrap nav-in">
+        <Link href="/" className="logo">
+          <img src="/images/logo.webp" alt="Hashtaglytics" className="logo-img" />
+        </Link>
+
+        <div className="nav-links">
+          {NAV_ITEMS.map((item) => (
+            <Link key={item.href} href={item.href}>
+              {item.label}
+            </Link>
+          ))}
+          <Link href={signedIn ? '/app/prospects' : '/connexion'} className="btn btn-ghost">
+            {signedIn ? 'Mon espace' : 'Connexion'}
+          </Link>
+        </div>
+
+        <button
+          ref={triggerRef}
+          type="button"
+          className="nav-burger"
+          aria-expanded={open}
+          aria-controls="site-nav-drawer"
+          aria-label={open ? 'Fermer le menu' : 'Ouvrir le menu'}
+          onClick={() => (open ? closeDrawer() : setOpen(true))}
+        >
+          <span aria-hidden="true">{open ? '\u2715' : '\u2630'}</span>
+        </button>
+      </div>
+
+      {/* Portaled to document.body -- the drawer and backdrop are no
+          longer descendants of <nav> at all, sidestepping whatever
+          ancestor (in globals.css or elsewhere) was constraining the
+          previous fixed-position attempt to the nav bar's own small
+          area instead of the full viewport. Same pattern already used
+          for the dashboard's Modal component. */}
+      {mounted && createPortal(drawerContent, document.body)}
+    </nav>
+  );
+}

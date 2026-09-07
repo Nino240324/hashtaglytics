@@ -1,0 +1,14 @@
+// app/app/layout.tsx
+
+import type { ReactNode } from 'react';
+import './app-shell.css';
+import { AppSidebar } from './_components/app-sidebar';
+
+export default function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="app-shell">
+      <AppSidebar />
+      <main className="app-main">{children}</main>
+    </div>
+  );
+}

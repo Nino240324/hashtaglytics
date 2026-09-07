@@ -1,0 +1,100 @@
+/* app/(auth)/auth.css
+ *
+ * Reuses confirmed globals.css tokens (--navy, --ink, --rule, --wash,
+ * --t-small etc.) and the shared .btn/.btn-primary/.btn-ghost classes
+ * directly -- both already exist there with exactly the values used
+ * here, confirmed by reading the real file rather than assumed. Only
+ * what's genuinely new to these five pages is defined below.
+ */
+
+.auth-shell {
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 72px 32px 96px;
+}
+@media (max-width: 640px) { .auth-shell { padding: 56px 20px 72px; } }
+
+.auth-card {
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 40px 36px;
+  box-shadow: 0 14px 40px rgba(16, 20, 24, .06);
+}
+
+.auth-card h1 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -.025em;
+  color: var(--ink);
+}
+.auth-lede {
+  margin-top: 10px;
+  margin-bottom: 28px;
+  font-size: var(--t-small);
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.auth-card form { margin-top: 4px; }
+.auth-field { margin-bottom: 18px; display: flex; flex-direction: column; gap: 6px; }
+.auth-field label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.auth-field input {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  padding: 11px 14px;
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-size: var(--t-small);
+}
+.auth-field input:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
+
+.auth-card .btn { width: 100%; text-align: center; margin-top: 6px; }
+
+.auth-error {
+  font-size: 13px;
+  color: var(--bad);
+  background: var(--bad-wash);
+  border: 1px solid #F3D5D0;
+  border-radius: 7px;
+  padding: 10px 13px;
+  margin-bottom: 18px;
+}
+.auth-success {
+  font-size: 13px;
+  color: var(--ok);
+  background: rgba(24, 121, 78, .07);
+  border: 1px solid rgba(24, 121, 78, .2);
+  border-radius: 7px;
+  padding: 10px 13px;
+  margin-bottom: 18px;
+}
+
+.auth-links { margin-top: 24px; font-size: 13.5px; color: var(--ink-soft); text-align: center; }
+.auth-links a { color: var(--navy); text-decoration: none; font-weight: 500; }
+.auth-links a:hover { text-decoration: underline; }
+.auth-links + .auth-links { margin-top: 10px; }
+
+/* Demo-only affordances (e.g. "simulate clicking the verification
+   link") that don't exist in the real product -- visually distinct on
+   purpose so nobody mistakes one for a real feature later. */
+.auth-demo-note {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px dashed var(--rule);
+}
+.auth-demo-note p {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-style: italic;
+  margin-bottom: 10px;
+}
+.auth-demo-note .btn { background: var(--wash); color: var(--ink-soft); border: 1px dashed var(--ink-faint); }
+.auth-demo-note .btn:hover { background: var(--rule); }

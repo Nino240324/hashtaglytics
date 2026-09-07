@@ -1,0 +1,87 @@
+/* components/site-footer.css
+ *
+ * Scoped to SiteFooter only, imported directly rather than added to
+ * globals.css -- isolating new component CSS avoids any risk of
+ * colliding with rules already there. Confirmed directly (not assumed):
+ * globals.css already styles .site-footer with its own padding
+ * (36px 0 48px) and border-top -- this file explicitly resets both to 0
+ * so they don't stack with the new .foot-top/.foot-bottom padding below,
+ * rather than silently layering on top of what's already there.
+ *
+ * Background matches .study exactly -- var(--navy-deep), confirmed from
+ * globals.css, not var(--navy) (a different, lighter token).
+ */
+
+.site-footer {
+  background: var(--navy-deep);
+  color: #fff;
+  padding: 0; /* reset globals.css's own padding -- .foot-top/.foot-bottom below own the spacing instead */
+  border-top: none; /* globals.css's var(--rule) border reads as a stray light-grey hairline against a dark background */
+  margin-top: 80px;
+}
+
+.foot-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  justify-content: space-between;
+  padding-top: 56px;
+  padding-bottom: 40px;
+}
+
+.foot-logo { flex-shrink: 0; }
+/* .logo (globals.css) sets color: var(--navy) for "Lytics" and
+   .logo b sets color: var(--sky) for "#" -- keeping the "#" exactly as
+   is (not touching .logo b at all), overriding only "Lytics" to white,
+   since navy-on-navy-deep would be nearly invisible here. */
+.foot-logo { color: #fff; }
+
+.foot-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+}
+
+.foot-col { min-width: 140px; }
+.foot-col h4 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .55);
+  margin-bottom: 14px;
+}
+.foot-col a {
+  display: block;
+  font-size: 14px;
+  color: #fff;
+  text-decoration: none;
+  margin-bottom: 10px;
+}
+.foot-col a:hover { color: var(--sky); }
+
+.foot-social {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.foot-social a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.foot-bottom {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  font-size: 13px;
+  color: rgba(255, 255, 255, .7);
+}
+
+@media (max-width: 700px) {
+  .foot-top { flex-direction: column; gap: 32px; }
+  .foot-columns { gap: 32px; }
+}

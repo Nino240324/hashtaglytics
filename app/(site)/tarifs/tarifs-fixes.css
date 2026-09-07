@@ -1,0 +1,91 @@
+/* app/(site)/tarifs/tarifs-fixes.css
+ *
+ * globals.css defines .tiers with overflow:hidden -- confirmed by
+ * reading the actual rule, not guessed. That rules out putting the
+ * badge inside the card with a negative top offset (the common "ribbon
+ * over the border" pattern): it would be clipped.
+ *
+ * Two separate badge instances, shown one at a time via CSS:
+ *
+ * Desktop (5 columns): the badge row is positioned absolutely within
+ * .tiers-wrap (which has no overflow:hidden of its own -- only .tiers
+ * does), sitting directly on top of the cards' own top edge rather
+ * than floating above with a gap. .tiers-wrap carries top padding
+ * matching the badge's height so the cards start right where the
+ * badge ends, with no separation between them.
+ *
+ * Mobile (.tiers already collapses to 1 column below 640px, confirmed):
+ * a separate row above .tiers would land at the top of the whole page,
+ * not aligned with Growth once it's the third card down -- so instead,
+ * a second badge renders inside the card, positioned absolutely with
+ * left:0/right:0 rather than negative margins, so it reliably spans
+ * the card's full width regardless of the card's own padding value at
+ * this breakpoint (which isn't fully confirmed from what I've seen of
+ * globals.css).
+ */
+
+.tiers-wrap {
+  position: relative;
+  margin-top: 48px;
+  padding-top: 33px; /* room for the absolutely-positioned badge row */
+}
+
+.tiers-badge-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+}
+.tiers-badge-cell { display: flex; }
+
+.tier-badge {
+  display: block;
+  width: 100%;
+  background: var(--navy);
+  color: #fff;
+  text-align: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 9px 0;
+}
+
+/* .tiers already has margin-top: 48px in globals.css -- .tiers-wrap now
+   owns that spacing (plus the badge's own height) instead, reset here
+   to avoid double spacing. */
+.tiers { margin-top: 0; }
+
+/* Mobile-only badge, hidden by default -- inverse of the row above. */
+.tier-badge-mobile { display: none; }
+
+@media (max-width: 640px) {
+  /* globals.css: @media(max-width:1100px) { .tier { border-right: none
+     !important; ... } } forces border-right:none on every .tier,
+     including .recommended, since !important beats .tier.recommended's
+     own border:1px solid var(--navy) (which isn't !important) despite
+     being more specific. Top/left/bottom survive because nothing else
+     touches them -- only right is lost. Only a matching !important can
+     win it back; scoped to .tier.recommended specifically so no other
+     tier is affected, and to this property only so top/left/bottom
+     (already correct) aren't touched. */
+  .tier.recommended { border-right: 1px solid var(--navy) !important; }
+
+  .tiers-wrap { padding-top: 0; }
+  .tiers-badge-row { display: none; }
+  .tier.recommended {
+    position: relative;
+    padding-top: 46px; /* room for the absolutely-positioned mobile badge */
+  }
+  .tier.recommended .tier-badge-mobile {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+  }
+}

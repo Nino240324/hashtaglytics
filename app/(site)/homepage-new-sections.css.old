@@ -1,0 +1,336 @@
+/* app/homepage-new-sections.css
+ *
+ * Styles for three new sections (Le produit, L'interface, Simple à
+ * utiliser) added to the homepage. Isolated file, imported directly by
+ * page.tsx rather than added to globals.css, same reasoning as
+ * auth.css/site-footer.css -- avoids any risk of colliding with rules
+ * already in a file that's still only partially visible in this
+ * session. Reuses confirmed tokens (--navy, --sky, --ink, --ink-soft,
+ * --ink-faint, --wash, --rule, --ok, --bad, --bad-wash) throughout.
+ */
+
+/* ── Hero adjustments for the longer replacement headline ───────────── */
+
+/* globals.css's --t-hero (clamp(32px, 4.4vw, 60px)) was sized for the
+   original 9-word headline. The replacement is 13 words and wrapped to
+   5 lines at that size -- scoped down specifically for .hero h1 rather
+   than redefining the shared token, since --t-hero may be used
+   elsewhere and this is a length problem specific to this headline. */
+.hero h1 { font-size: clamp(28px, 3.4vw, 44px); }
+
+/* --t-label (11px) is correctly small for the mono eyebrow labels it's
+   used for elsewhere -- just too small for a reassurance line sitting
+   directly under two prominent buttons. Scoped to .hero .fine only. */
+.hero .fine { font-size: 13px; }
+
+/* ── Section: Le produit ──────────────────────────────────────────── */
+
+/* Background is var(--navy), not var(--navy-deep) -- both are real,
+   existing tokens, but Études and the footer already use navy-deep,
+   and using the SAME shade a third time would make three sections blur
+   together rather than read as distinct. Navy is also the more
+   immediately recognisable "brand blue" -- it's what the logo, the
+   eyebrow text, and every primary button already use, so this section
+   still reads as unmistakably the same brand without repeating the
+   exact shade already spoken for elsewhere on the page. */
+.product { padding: 50px 0 110px; background: var(--navy-deep); color: #fff; }
+.product h2 { font-size: var(--t-h2-home); font-weight: 600; letter-spacing: -.03em; max-width: 22ch; color: #fff; }
+.product .lede { margin-top: 16px; color: rgba(255, 255, 255, .72); max-width: 60ch; }
+
+.product-flow {
+  position: relative;
+  margin-top: 52px;
+  display: flex;
+}
+.product-line {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, .22);
+}
+.product-stage {
+  flex: 1;
+  min-width: 0;
+  padding: 26px 24px 0 0;
+  position: relative;
+}
+.product-stage:last-child { padding-right: 0; }
+.product-stage .node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--sky);
+  z-index: 1;
+}
+.product-stage .stage-num {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  color: rgba(255, 255, 255, .65);
+}
+.product-stage h3 {
+  margin-top: 9px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: #fff;
+}
+.product-stage p {
+  margin-top: 10px;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, .75);
+}
+@media (max-width: 860px) {
+  .product-flow { flex-direction: column; gap: 0; }
+  /* The horizontal line only makes sense across a row -- hidden here in
+     favour of a per-stage vertical segment below, which is more robust
+     than trying to position one continuous line across stages whose
+     heights vary with description length. */
+  .product-line { display: none; }
+  .product-stage { padding: 0 0 30px 30px; }
+  .product-stage:last-child { padding-bottom: 0; }
+  .product-stage .node { top: 0; left: 0; }
+  /* Each stage draws the segment connecting ITS OWN node down to the
+     next one -- ties the line to that stage's actual box instead of a
+     guessed absolute position, so it can't drift out of alignment
+     regardless of how long any one description runs. */
+  .product-stage::before {
+    content: "";
+    position: absolute;
+    top: 13px;
+    left: 6px;
+    bottom: 0;
+    width: 1px;
+    background: rgba(255, 255, 255, .22);
+  }
+  .product-stage:last-child::before { display: none; }
+}
+
+/* ── Section: Comment nous les trouvons (méthode) ────────────────────
+ *
+ * .how, .step .num, .step h3, .step p already exist in globals.css,
+ * using shared tokens (--t-label, --t-h3, --t-small) that are also used
+ * elsewhere on the site -- redefining those tokens would change type
+ * sizes on other pages too. Overriding here instead, scoped with
+ * #methode so these selectors have higher specificity than the plain
+ * .how/.step ones in globals.css and win regardless of which
+ * stylesheet's rules happen to load first.
+ */
+
+/* Padding: same approach as .product -- top reduced by 30px, the same
+   30px added to bottom, so total padding (and therefore total section
+   height) is unchanged, just redistributed so the heading sits higher. */
+#methode.how { padding: 50px 0 110px; }
+
+/* --t-label (11px) -- bumped ~27%, matching the range used for
+   .product-stage .stage-num. */
+#methode .step .num { font-size: 14px; }
+
+/* --t-h3 (20px) -- bumped 1px. Same reasoning as .product-stage h3:
+   bumping the description alone shrinks the title/description gap
+   (5px -> 4px here); this keeps that gap where it was rather than let
+   it quietly compress as a side effect. */
+#methode .step h3 { font-size: 21px; }
+
+/* --t-small (15px) -- the 1px readability bump asked for. */
+#methode .step p { font-size: 16px; }
+
+/* ── Section: L'interface (interactive, details/summary — no React
+      state, no useEffect; expansion is native browser behaviour) ───── */
+
+.interface { padding: 80px 0; background: var(--navy-deep); color: #fff; }
+.interface h2 { font-size: var(--t-h2-home); font-weight: 600; letter-spacing: -.03em; max-width: 22ch; color: #fff; }
+.interface .lede { margin-top: 16px; color: rgba(255, 255, 255, .72); max-width: 60ch; }
+
+/* Window chrome -- three dots reuse --bad/--star/--ok, already-existing
+   semantic tokens used elsewhere for badges and ratings, not new colors
+   introduced for this purpose. Kept deliberately minimal (no traffic-
+   light gradients, no fake icons) so it reads as "application window"
+   without becoming decorative. */
+.interface-window {
+  margin-top: 44px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(16, 20, 24, .1);
+  background: #fff;
+  /* Resets inheritance from .interface's white text -- the mock has its
+     own white background and needs normal dark text regardless of what
+     color the section around it uses. */
+  color: var(--ink);
+}
+.interface-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 18px;
+  background: var(--wash);
+  border-bottom: 1px solid var(--rule);
+}
+.interface-dot { width: 9px; height: 9px; border-radius: 50%; }
+.interface-dot.dot-1 { background: var(--bad); }
+.interface-dot.dot-2 { background: var(--star); }
+.interface-dot.dot-3 { background: var(--ok); }
+.interface-window-url {
+  margin-left: 10px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.interface-mock-head {
+  padding: 22px 28px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.interface-mock-head h3 { font-size: 21px; font-weight: 600; letter-spacing: -.015em; }
+.interface-mock-head span {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.interface-mock-cols {
+  display: grid;
+  grid-template-columns: 1fr 80px 100px 140px 140px;
+  gap: 12px;
+  padding: 11px 28px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--rule);
+}
+
+.interface-row { border-bottom: 1px solid var(--rule); }
+.interface-row:last-child { border-bottom: none; }
+
+/* Native <details>/<summary> handles the expand/collapse -- no React
+   state, no client component. Browser-default marker removed and
+   replaced with .chevron so the affordance matches the real dashboard's
+   own expandable-row triangle rather than each browser's own disclosure
+   glyph. */
+.interface-row summary {
+  display: grid;
+  grid-template-columns: 1fr 80px 100px 140px 140px;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 28px;
+  font-size: 14.5px;
+  cursor: pointer;
+  list-style: none;
+}
+.interface-row summary::-webkit-details-marker { display: none; }
+.interface-row summary:hover { background: var(--wash); }
+.interface-row summary:focus-visible { outline: 2px solid var(--sky); outline-offset: -2px; }
+
+.biz-cell { display: flex; align-items: baseline; gap: 10px; }
+.chevron {
+  font-size: 11px;
+  color: var(--ink-faint);
+  transition: transform .15s ease;
+  flex-shrink: 0;
+}
+details[open] > summary .chevron { transform: rotate(90deg); }
+.biz-cell .biz { font-weight: 600; letter-spacing: -.005em; }
+.biz-cell .loc { font-size: 12px; color: var(--ink-faint); font-weight: 400; margin-top: 1px; }
+.interface-row .mono-num { font-family: "IBM Plex Mono", monospace; }
+
+.interface-badge {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.interface-badge.ok { background: rgba(24, 121, 78, .08); color: var(--ok); border: 1px solid rgba(24, 121, 78, .2); }
+.interface-badge.bad { background: var(--bad-wash); color: var(--bad); border: 1px solid #F3D5D0; }
+.interface-badge.neutral { background: var(--wash); color: var(--ink-soft); border: 1px solid var(--rule); }
+
+/* Expanded panel -- four columns (Contact / Fiche Google / Site web /
+   Mesures), matching the field groupings from the real dashboard's own
+   expandable prospect rows. */
+.interface-detail {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 28px;
+  padding: 6px 28px 26px 62px; /* left offset roughly aligns with the business name above, past the chevron */
+  background: var(--wash);
+}
+.detail-col h4 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 10px;
+}
+.detail-field { margin-bottom: 10px; }
+.detail-field:last-child { margin-bottom: 0; }
+.detail-field span {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+.detail-field strong { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.detail-field strong.pending {
+  font-family: "IBM Plex Mono", monospace;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 760px) {
+  .interface-mock-cols { display: none; }
+  .interface-row summary {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    justify-items: start;
+  }
+  .interface-detail {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 6px 20px 22px 20px;
+  }
+}
+
+/* ── Section: Simple à utiliser, pas simple en dessous ──────────────────
+   Removed entirely (JSX and CSS both) -- was found not to serve the
+   commercial message. Not replaced with anything.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* ── Close section heading ────────────────────────────────────────────
+   globals.css's .close h2 has max-width: 20ch, sized for the previous
+   headline ("Commencez par dix prospects, gratuitement.", ~43 chars).
+   The replacement ("Créez votre compte et découvrez vos 10 premiers
+   prospects.", ~58 chars) was wrapping to 3 lines as a direct result --
+   widening here targets a roughly balanced 2-line split instead. */
+.close h2 { max-width: 34ch; line-height: 1.25; }
+/* Top padding reduced to move the heading up within the section --
+   no compensating bottom increase this time (unlike .product/.how),
+   since nothing here requires the section's total height to stay fixed. */
+.close { padding-top: 54px; padding-bottom: 54px; }
+/* globals.css: .close p margin-top 16px, .close .cta margin-top 30px --
+   heading-to-paragraph nudged slightly further, paragraph-to-button
+   increased more substantially per feedback that 40px still read as
+   too tight. Heading itself untouched throughout. */
+.close p { margin-top: 30px; }
+.close .cta { margin-top: 56px; }

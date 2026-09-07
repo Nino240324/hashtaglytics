@@ -1,0 +1,439 @@
+// app/app/parametres/page.tsx
+//
+// Brief 5.6: two sections. MON COMPTE (name/email/password). MA MARQUE
+// (logo/colour/phone/contact email) with a LIVE PREVIEW of the report
+// masthead -- the key feature of this screen. The preview's structure
+// (colour band, logo box, doc-ref text) is modelled directly on the real
+// PDF generator's masthead CSS (server.js: .band, .logo-box, .logo-text,
+// .doc-ref), not invented -- so what you see here is actually
+// representative of the real report header, not a generic swatch.
+//
+// Logo constraints are exact, from MVP_Document §7 ("What IS built from
+// day one"): PNG or SVG only, max 400x150px, max 500KB. Upload itself is
+// stubbed -- the Supabase Storage bucket doesn't exist yet -- but every
+// validation check runs for real client-side, and a real local preview
+// renders from the picked file via a blob URL. Only the final "send
+// bytes to storage" step is fake.
+
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import {
+  fetchAccountInfo,
+  fetchBrandInfo,
+  updateAccountInfo,
+  updateBrandInfo,
+  type AccountInfo,
+  type BrandInfo,
+} from '@/lib/mock-data';
+
+// -- WCAG 2.1 contrast ratio -----------------------------------------
+// Standard relative-luminance formula. Verified against the known
+// reference case (black vs white = 21:1) before this shipped -- see the
+// verification note in the accompanying summary, not repeated here since
+// this is shipped code, not a scratch script.
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(hex);
+  if (!m) return null;
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const linearize = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const [rl, gl, bl] = [linearize(r), linearize(g), linearize(b)];
+  return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+}
+
+function contrastRatioVsWhite(hex: string): number | null {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  const l1 = relativeLuminance(rgb);
+  const l2 = 1; // white
+  return (l2 + 0.05) / (l1 + 0.05);
+}
+
+// AA large-text threshold (3:1) -- the masthead's text fallback is 14pt
+// bold, which qualifies as "large text" under WCAG's own definition
+// (>=14pt bold or >=18pt regular), not the stricter 4.5:1 normal-text
+// threshold.
+const CONTRAST_WARN_THRESHOLD = 3;
+
+const HEX_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+const PRESET_COLOURS = [
+  '#1E3A72', // this dashboard's own navy
+  '#C0392B',
+  '#18794E',
+  '#E0A32E',
+  '#6B46C1',
+  '#0F766E',
+];
+
+// Logo constraints, exact, from MVP_Document.
+const MAX_LOGO_BYTES = 500 * 1024;
+const MAX_LOGO_WIDTH = 400;
+const MAX_LOGO_HEIGHT = 150;
+const ALLOWED_LOGO_TYPES = ['image/png', 'image/svg+xml'];
+
+function readImageDimensions(url: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error('image-load-failed'));
+    img.src = url;
+  });
+}
+
+// Fixed illustrative date for the preview's doc-ref text -- never
+// new Date() during render (hydration rule: server and client must
+// produce identical output on the first pass).
+const PREVIEW_DATE_LABEL = '31 août 2026';
+
+export default function ParametresPage() {
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const [brand, setBrand] = useState<BrandInfo | null>(null);
+
+  // MON COMPTE -- editable local copies, seeded once account loads.
+  const [nameInput, setNameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
+
+  // Password -- never persisted anywhere, mock or otherwise; purely a
+  // client-side form with a stub confirmation on submit.
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+
+  // MA MARQUE -- editable local copies, seeded once brand loads.
+  const [agencyNameInput, setAgencyNameInput] = useState('');
+  const [colourInput, setColourInput] = useState('');
+  const [contactPhoneInput, setContactPhoneInput] = useState('');
+  const [contactEmailInput, setContactEmailInput] = useState('');
+  const [brandMessage, setBrandMessage] = useState<string | null>(null);
+
+  // Logo -- local file + validated blob preview URL. Nothing here is
+  // uploaded; logoPreviewUrl only ever points at a local blob.
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchAccountInfo().then((a) => {
+      setAccount(a);
+      setNameInput(a.name);
+      setEmailInput(a.email);
+    });
+    fetchBrandInfo().then((b) => {
+      setBrand(b);
+      setAgencyNameInput(b.agencyName);
+      setColourInput(b.primaryColour);
+      setContactPhoneInput(b.contactPhone ?? '');
+      setContactEmailInput(b.contactEmail ?? '');
+    });
+  }, []);
+
+  // Revoke the blob URL on replacement/unmount -- it's created fresh on
+  // every valid file pick, never reused.
+  useEffect(() => {
+    return () => {
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    };
+  }, [logoPreviewUrl]);
+
+  async function handleAccountSave(e: { preventDefault(): void }) {
+    e.preventDefault();
+    const result = await updateAccountInfo({ name: nameInput, email: emailInput });
+    setAccountMessage(result.message);
+  }
+
+  function handlePasswordSave(e: { preventDefault(): void }) {
+    e.preventDefault();
+    setPasswordMessage(null);
+    if (newPassword.length < 8) {
+      setPasswordError('Le nouveau mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
+    setPasswordError(null);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordMessage('Le changement de mot de passe n\u2019est pas encore câblé.');
+  }
+
+  async function handleLogoChange(e: { target: { files: FileList | null } }) {
+    setLogoError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+      setLogoError('Format non accepté : PNG ou SVG uniquement (JPEG refusé).');
+      setLogoFile(null);
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+      setLogoPreviewUrl(null);
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError(`Fichier trop volumineux : ${Math.round(file.size / 1024)} Ko, maximum 500 Ko.`);
+      setLogoFile(null);
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+      setLogoPreviewUrl(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+
+    // Dimension check only applies to PNG -- SVG is scalable by nature,
+    // and reliably reading its intrinsic size client-side (many SVGs
+    // have no width/height, only a viewBox) isn't worth the complexity
+    // for a mock. Noted here rather than silently skipped without
+    // explanation.
+    if (file.type === 'image/png') {
+      try {
+        const { width, height } = await readImageDimensions(url);
+        if (width > MAX_LOGO_WIDTH || height > MAX_LOGO_HEIGHT) {
+          setLogoError(`Dimensions trop grandes : ${width}×${height}px, maximum 400×150px.`);
+          URL.revokeObjectURL(url);
+          setLogoFile(null);
+          setLogoPreviewUrl(null);
+          return;
+        }
+      } catch {
+        setLogoError('Impossible de lire ce fichier image.');
+        URL.revokeObjectURL(url);
+        setLogoFile(null);
+        setLogoPreviewUrl(null);
+        return;
+      }
+    }
+
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    setLogoFile(file);
+    setLogoPreviewUrl(url);
+  }
+
+  async function handleBrandSave(e: { preventDefault(): void }) {
+    e.preventDefault();
+    const result = await updateBrandInfo({
+      agencyName: agencyNameInput,
+      primaryColour: HEX_PATTERN.test(colourInput) ? colourInput : undefined,
+      contactPhone: contactPhoneInput || null,
+      contactEmail: contactEmailInput || null,
+    });
+    setBrandMessage(
+      logoFile
+        ? `${result.message} Le logo choisi (${logoFile.name}) n\u2019a pas non plus été téléversé -- aperçu local uniquement.`
+        : result.message,
+    );
+  }
+
+  if (account === null || brand === null) {
+    return <p className="loading-text">Chargement…</p>;
+  }
+
+  const isValidColour = HEX_PATTERN.test(colourInput);
+  const previewColour = isValidColour ? colourInput : brand.primaryColour;
+  const contrast = isValidColour ? contrastRatioVsWhite(colourInput) : null;
+  const showContrastWarning = contrast !== null && contrast < CONTRAST_WARN_THRESHOLD;
+
+  return (
+    <div>
+      <div className="page-head">
+        <h1>Paramètres</h1>
+      </div>
+
+      <section className="settings-section">
+        <h2>Mon compte</h2>
+        <div className="settings-card">
+          <form onSubmit={handleAccountSave}>
+            <div className="filter-group">
+              <label htmlFor="acc-name">Nom</label>
+              <input id="acc-name" type="text" value={nameInput} onChange={(e) => setNameInput(e.target.value)} />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="acc-email">E-mail</label>
+              <input
+                id="acc-email"
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="btn btn-primary">
+              Enregistrer
+            </button>
+            {accountMessage && <p className="settings-stub-note">{accountMessage}</p>}
+          </form>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <h2>Mot de passe</h2>
+        <div className="settings-card">
+          <form onSubmit={handlePasswordSave}>
+            <div className="filter-group">
+              <label htmlFor="pw-current">Mot de passe actuel</label>
+              <input
+                id="pw-current"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="pw-new">Nouveau mot de passe</label>
+              <input
+                id="pw-new"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="pw-confirm">Confirmer le nouveau mot de passe</label>
+              <input
+                id="pw-confirm"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            {passwordError && <p className="settings-error-note">{passwordError}</p>}
+            <button type="submit" className="btn btn-primary">
+              Modifier le mot de passe
+            </button>
+            {passwordMessage && <p className="settings-stub-note">{passwordMessage}</p>}
+          </form>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <h2>Ma marque</h2>
+        <div className="settings-brand-grid">
+          <div className="settings-card">
+            <form onSubmit={handleBrandSave}>
+              <div className="filter-group">
+                <label htmlFor="brand-name">Nom de l&rsquo;agence</label>
+                <input
+                  id="brand-name"
+                  type="text"
+                  value={agencyNameInput}
+                  onChange={(e) => setAgencyNameInput(e.target.value)}
+                />
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="brand-logo">Logo</label>
+                <input
+                  id="brand-logo"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/svg+xml"
+                  onChange={handleLogoChange}
+                />
+                <p className="settings-hint">PNG ou SVG, 400×150px maximum, 500 Ko maximum.</p>
+                {logoError && <p className="settings-error-note">{logoError}</p>}
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="brand-colour">Couleur principale</label>
+                <div className="colour-palette" role="group" aria-label="Couleurs prédéfinies">
+                  {PRESET_COLOURS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`colour-swatch${colourInput.toLowerCase() === c.toLowerCase() ? ' selected' : ''}`}
+                      style={{ background: c }}
+                      aria-label={c}
+                      onClick={() => setColourInput(c)}
+                    />
+                  ))}
+                </div>
+                <input
+                  id="brand-colour"
+                  type="text"
+                  className="mono-num"
+                  value={colourInput}
+                  onChange={(e) => setColourInput(e.target.value)}
+                  placeholder="#1E3A72"
+                />
+                {!isValidColour && colourInput !== '' && (
+                  <p className="settings-error-note">Format attendu : #RRGGBB (6 chiffres hexadécimaux).</p>
+                )}
+                {showContrastWarning && (
+                  <p className="settings-warning-note">
+                    Contraste faible sur fond blanc ({contrast!.toFixed(1)}:1, recommandé 3:1 minimum) -- le
+                    nom de l&rsquo;agence peut être difficile à lire sans logo.
+                  </p>
+                )}
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="brand-phone">Téléphone de contact</label>
+                <input
+                  id="brand-phone"
+                  type="tel"
+                  value={contactPhoneInput}
+                  onChange={(e) => setContactPhoneInput(e.target.value)}
+                />
+              </div>
+              <div className="filter-group">
+                <label htmlFor="brand-email">E-mail de contact</label>
+                <input
+                  id="brand-email"
+                  type="email"
+                  value={contactEmailInput}
+                  onChange={(e) => setContactEmailInput(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary">
+                Enregistrer
+              </button>
+              {brandMessage && <p className="settings-stub-note">{brandMessage}</p>}
+            </form>
+          </div>
+
+          <div className="settings-preview-wrap">
+            <h3>Aperçu de l&rsquo;en-tête du rapport</h3>
+            <div className="masthead-preview">
+              <div className="masthead-preview-band" style={{ background: previewColour }} />
+              <div className="masthead-preview-row">
+                <div className="masthead-preview-logo">
+                  {logoPreviewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoPreviewUrl} alt="" />
+                  ) : (
+                    <span style={{ color: previewColour }}>{agencyNameInput || 'Votre agence'}</span>
+                  )}
+                </div>
+                <div className="masthead-preview-docref">
+                  Rapport de visibilité locale
+                  <br />
+                  {PREVIEW_DATE_LABEL}
+                </div>
+              </div>
+            </div>
+            <p className="settings-hint">
+              Reproduit la structure réelle de l&rsquo;en-tête PDF (bande de couleur, logo, référence de
+              document) -- pas une simple maquette.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

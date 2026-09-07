@@ -1,0 +1,309 @@
+// app/app/campagnes/page.tsx
+
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import * as Tooltip from '@radix-ui/react-tooltip';
+import {
+  createCampaign,
+  fetchCampaignsOverview,
+  completionPct,
+  type AgencyPlanUsage,
+  type Campaign,
+  type Commune,
+} from '@/lib/mock-data';
+import { CommuneAutocomplete } from '../_components/commune-autocomplete';
+import { Modal } from '../_components/modal';
+import { LeadQuotaStat } from '../_components/lead-quota-stat';
+
+const STATUS_LABELS: Record<Campaign['status'], string> = {
+  in_progress: 'En cours',
+  completed: 'Terminée',
+  failed: 'Échouée',
+  paused: 'En pause',
+  quota_reached: 'Quota atteint',
+};
+
+function statusBadgeClass(status: Campaign['status']): string {
+  if (status === 'completed') return 'badge badge-ok';
+  if (status === 'failed') return 'badge badge-opportunity';
+  if (status === 'quota_reached' || status === 'paused') return 'badge badge-pending';
+  return 'badge badge-neutral'; // in_progress
+}
+
+function formatDateFR(iso: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(iso));
+}
+
+// One card's ⋯ menu. Archive only -- campaign_grids and
+// business_grid_positions cascade from campaigns, so deleting one would
+// destroy paid-for scan history while the businesses themselves survive
+// with their rank observations gone. campaigns.status has no 'archived'
+// value yet, so this is a visible TODO, not a working action.
+function CampaignMenu() {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  return (
+    <div className="campaign-menu" ref={menuRef}>
+      <button
+        type="button"
+        className="campaign-menu-trigger"
+        aria-label="Actions"
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="campaign-menu-list" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            disabled
+            title="campaigns.status n'a pas encore de valeur 'archived' — pas encore câblé"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
+            Archiver
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CampagnesPage() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [planUsage, setPlanUsage] = useState<AgencyPlanUsage | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [selectedCommune, setSelectedCommune] = useState<Commune | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { campaigns, planUsage } = await fetchCampaignsOverview();
+    setCampaigns(campaigns);
+    setPlanUsage(planUsage);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Change 1: this client-side check is a COURTESY, not the guarantee.
+  // The real enforcement is a BEFORE INSERT trigger on campaigns that
+  // takes an advisory lock on the agency id -- a second browser tab (or a
+  // stale one that's been sitting open) can always get there first. This
+  // disabled state exists so the form doesn't invite an attempt already
+  // known to fail, not because the client can be trusted to be right.
+  const atCampaignLimit =
+    planUsage !== null &&
+    planUsage.maxActiveCampaigns !== null &&
+    planUsage.activeCampaigns >= planUsage.maxActiveCampaigns;
+
+  const canSubmit = !submitting && keywordInput.trim() !== '' && selectedCommune !== null;
+
+  function closeModal() {
+    setModalOpen(false);
+    setKeywordInput('');
+    setSelectedCommune(null);
+    setConfirmation(null);
+  }
+
+  async function handleSubmit(e: { preventDefault(): void }) {
+    e.preventDefault();
+    if (!canSubmit || selectedCommune === null) return;
+    setSubmitting(true);
+    setConfirmation(null);
+    try {
+      const result = await createCampaign({
+        keyword: keywordInput.trim().toLowerCase(),
+        codeInsee: selectedCommune.code_insee,
+      });
+      setConfirmation(result.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Tooltip.Provider delayDuration={200}>
+    <div>
+      <div className="page-head">
+        <h1>Campagnes</h1>
+      </div>
+
+      <div className="campagnes-toolbar">
+        <div className="campagnes-toolbar-stats">
+          {/* maxActiveCampaigns === null means unlimited (an enterprise
+              agreement) -- hide the counter entirely rather than invent a
+              number to show against. */}
+          {planUsage && planUsage.maxActiveCampaigns !== null && (
+            <span className={`campaign-quota${atCampaignLimit ? ' at-limit' : ''}`}>
+              <span className="mono-num">
+                {planUsage.activeCampaigns} / {planUsage.maxActiveCampaigns}
+              </span>{' '}
+              campagnes actives
+            </span>
+          )}
+          {/* Second placement of the lead quota, beside the campaign
+              counter specifically -- an agency with 3 leads left should
+              see that before starting a campaign that will find 600
+              businesses. The global header (every screen) already shows
+              this; this is deliberately in addition to that, not instead
+              of it. */}
+          {planUsage && <LeadQuotaStat planUsage={planUsage} />}
+        </div>
+        {atCampaignLimit ? (
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              {/* aria-disabled, not disabled: a genuinely disabled button
+                  often won't reliably fire hover/focus at all in some
+                  browsers, which would silently break the "explain on
+                  hover AND focus" requirement. Visually identical, click
+                  guarded below instead. */}
+              <button
+                type="button"
+                className="btn btn-primary btn-toolbar-cta is-disabled"
+                aria-disabled="true"
+                onClick={(e) => e.preventDefault()}
+              >
+                + Nouvelle campagne
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content className="info-tooltip-content" sideOffset={6}>
+                Limite de {planUsage?.maxActiveCampaigns} campagnes actives atteinte. Terminez ou
+                archivez une campagne pour en lancer une nouvelle.
+                <Tooltip.Arrow className="info-tooltip-arrow" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary btn-toolbar-cta"
+            onClick={() => setModalOpen(true)}
+          >
+            + Nouvelle campagne
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="loading-text">Chargement…</p>
+      ) : campaigns.length === 0 ? (
+        <div className="empty-state campaigns-empty-state">
+          <h2>Aucune campagne pour l&rsquo;instant.</h2>
+          {planUsage?.tierName === 'Free' ? (
+            <p>Votre recherche gratuite : un métier, une ville, 20 prospects.</p>
+          ) : (
+            <p>
+              Choisissez un métier et une ville. Nous scannons Google Maps et vous livrons des
+              prospects qualifiés en quelques minutes.
+            </p>
+          )}
+          <button type="button" className="btn btn-primary" onClick={() => setModalOpen(true)}>
+            + Créer ma première campagne
+          </button>
+        </div>
+      ) : (
+        <div className="campaign-card-grid">
+          {campaigns.map((c) => (
+            <Link key={c.id} href={`/app/campagnes/${c.id}`} className="campaign-card-link">
+              <div className="campaign-card">
+                <div className="campaign-card-top">
+                  <span className={statusBadgeClass(c.status)}>{STATUS_LABELS[c.status]}</span>
+                  <CampaignMenu />
+                </div>
+                <div className="campaign-card-keyword">{c.keyword}</div>
+                <div className="campaign-card-town">
+                  {c.commune.nom} <span className="mono-num">({c.commune.dept_code})</span>
+                </div>
+                <div className="campaign-card-stats">
+                  <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
+                  {/* 'completed' shows no percentage -- 100% by definition.
+                      'in_progress', 'failed', and 'quota_reached' all
+                      stopped somewhere short of the end, and an agency
+                      can't tell 5% from 95% without a number. 'paused'
+                      isn't named in the spec either way and has no mock
+                      example to check against -- flagged, not guessed. */}
+                  {(c.status === 'in_progress' ||
+                    c.status === 'failed' ||
+                    c.status === 'quota_reached') && (
+                    <span className="campaign-card-pct mono-num"> · {completionPct(c)}%</span>
+                  )}
+                </div>
+                <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      <Modal isOpen={modalOpen} onClose={closeModal} title="Nouvelle campagne">
+        <form onSubmit={handleSubmit}>
+          <div className="filter-group">
+            <label htmlFor="new-keyword">Mot-clé</label>
+            <input
+              id="new-keyword"
+              type="text"
+              placeholder="ex. plombier"
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="filter-group">
+            <CommuneAutocomplete
+              id="new-commune"
+              label="Ville"
+              value={selectedCommune}
+              onChange={setSelectedCommune}
+              placeholder="ex. Lille"
+              disabled={submitting}
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
+            {submitting ? 'Envoi…' : 'Créer la campagne'}
+          </button>
+
+          {confirmation && <p className="campaign-confirmation">{confirmation}</p>}
+        </form>
+      </Modal>
+    </div>
+    </Tooltip.Provider>
+  );
+}

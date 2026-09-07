@@ -1,0 +1,73 @@
+/* legal-sections.css
+ *
+ * .legal/.legal h1/.legal .updated already exist in globals.css and are
+ * left untouched. This file adds only what's genuinely new: the body
+ * section structure (heading + TODO placeholder) that didn't exist yet
+ * on any of the three legal pages. Imported directly by each page
+ * rather than added to globals.css, same isolation approach used
+ * throughout this session (auth.css, site-footer.css, etc).
+ */
+
+.legal-body { margin-top: 56px; }
+
+.legal-section { margin-bottom: 40px; }
+.legal-section:last-child { margin-bottom: 0; }
+
+.legal-section h2 {
+  font-size: var(--t-h3);
+  font-weight: 600;
+  letter-spacing: -.015em;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+
+/* The pages now carry real copy, so paragraphs need styling — until now
+   every body element was a .legal-todo placeholder and nothing else had
+   any. */
+.legal-section p {
+  font-size: var(--t-body);
+  line-height: 1.7;
+  color: var(--ink-soft);
+  margin-bottom: 14px;
+}
+.legal-section p:last-child { margin-bottom: 0; }
+
+.legal-section strong { color: var(--ink); font-weight: 600; }
+
+/* WCAG 1.4.1 — a link inside prose must be distinguishable by something
+   other than colour alone. Scoped to .legal-body deliberately: nav and
+   footer links sit in lists and are already distinguishable by position,
+   so underlining them would look wrong and is not required. */
+.legal-body a {
+  color: var(--navy);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.legal-body a:hover { text-decoration-thickness: 2px; }
+.legal-body a:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Kept for any section still awaiting content. Nothing uses it on the
+   three legal pages any more. */
+.legal-todo {
+  font-size: var(--t-small);
+  line-height: 1.6;
+  font-style: italic;
+  color: var(--ink-faint);
+  background: var(--wash);
+  border-left: 3px dashed var(--rule);
+  padding: 14px 18px;
+  border-radius: 4px;
+}
+.legal-todo strong {
+  font-style: normal;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--ink-faint);
+  margin-right: 6px;
+}
