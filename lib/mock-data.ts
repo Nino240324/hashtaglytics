@@ -119,6 +119,10 @@ export type Prospect = {
   website_title_tag: string | null;
   h1_text: string | null; // verbatim -- never classify it, that's the agency's call
   meta_description: string | null; // verbatim; length is shown, not judged
+  // FK -> campaigns.id, via campaign_grids. This is the real campaign
+  // membership -- NOT keyword+city (see fetchProspectsForCampaign below
+  // for why matching on city is wrong).
+  campaign_id: string;
 };
 
 export type Commune = {
@@ -145,6 +149,7 @@ export type Campaign = {
 export const mockProspects: Prospect[] = [
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000001",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Plomberie Girard & Fils",
     "city": "Lyon",
     "category": "Plombier chauffagiste",
@@ -174,6 +179,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000002",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Dépannage Plomberie Croix-Rousse",
     "city": "Lyon",
     "category": "Plombier",
@@ -203,6 +209,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000003",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "SOS Plombier Presqu'île",
     "city": "Lyon",
     "category": "Entreprise de plomberie",
@@ -232,6 +239,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000004",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "AquaFix Plomberie Villeurbanne",
     "city": "Lyon",
     "category": "Plombier",
@@ -261,6 +269,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000005",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Plomberie Générale Belleville",
     "city": "Paris",
     "category": "Plombier",
@@ -290,6 +299,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000006",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Ets Meunier Plomberie 11e",
     "city": "Paris",
     "category": "Plombier chauffagiste",
@@ -319,6 +329,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000007",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Plomberie du Vieux-Lille",
     "city": "Lille",
     "category": "Plombier",
@@ -348,6 +359,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000008",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "SOS Fuite Lille Centre",
     "city": "Lille",
     "category": "Plombier",
@@ -377,6 +389,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000009",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Plombier Dépannage 24/7 Rhône",
     "city": null,
     "category": "Plombier",
@@ -406,6 +419,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000010",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Plomberie Mobile Gironde",
     "city": null,
     "category": "Plombier chauffagiste",
@@ -435,6 +449,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000011",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Menuiserie Bernard",
     "city": "Lyon",
     "category": "Menuisier",
@@ -464,6 +479,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000012",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Atelier du Bois Lyonnais",
     "city": "Lyon",
     "category": "Menuisier ébéniste",
@@ -493,6 +509,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000013",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Menuiserie Fabre Confluence",
     "city": "Lyon",
     "category": "Menuiserie",
@@ -522,6 +539,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000014",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "L'Établi Parisien",
     "city": "Paris",
     "category": "Menuisier",
@@ -551,6 +569,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000015",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Menuiserie Duval Aménagement",
     "city": "Paris",
     "category": "Menuisier d'agencement",
@@ -580,6 +599,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000016",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Bois & Formes Paris 15e",
     "city": "Paris",
     "category": "Menuisier",
@@ -609,6 +629,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000017",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Menuiserie du Vieux-Lille",
     "city": "Lille",
     "category": "Menuiserie",
@@ -638,6 +659,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000018",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Atelier Nord Ébénisterie",
     "city": "Lille",
     "category": "Menuisier ébéniste",
@@ -667,6 +689,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000019",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Menuiserie Itinérante Rhône-Alpes",
     "city": null,
     "category": "Menuisier",
@@ -696,6 +719,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0002-4aaa-8bbb-000000000020",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Ébénisterie Mobile Sud-Ouest",
     "city": null,
     "category": "Ébéniste",
@@ -725,6 +749,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000021",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Cabinet Moreau Avocat",
     "city": "Lyon",
     "category": "Cabinet d'avocats",
@@ -754,6 +779,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000022",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "SCP Lambert & Associés",
     "city": "Lyon",
     "category": "Cabinet d'avocats",
@@ -783,6 +809,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000023",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Maître Sophie Renard",
     "city": "Lyon",
     "category": "Avocat",
@@ -812,6 +839,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000024",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Cabinet Girard Avocats",
     "city": "Lyon",
     "category": "Avocat",
@@ -841,6 +869,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000025",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Étude Fontaine Avocats",
     "city": "Paris",
     "category": "Cabinet d'avocats",
@@ -870,6 +899,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000026",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Cabinet Avocat Dubreuil",
     "city": "Paris",
     "category": "Avocat",
@@ -899,6 +929,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000027",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Maître Thomas Vidal",
     "city": "Paris",
     "category": "Avocat",
@@ -928,6 +959,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000028",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Cabinet Lecomte Lille",
     "city": "Lille",
     "category": "Cabinet d'avocats",
@@ -957,6 +989,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000029",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Maître Camille Perrin",
     "city": "Lille",
     "category": "Avocat",
@@ -986,6 +1019,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0003-4aaa-8bbb-000000000030",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Cabinet Avocat Bastide",
     "city": "Bordeaux",
     "category": "Avocat",
@@ -1015,6 +1049,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000031",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Atelier d'Architecture Lyon",
     "city": "Lyon",
     "category": "Cabinet d'architecture",
@@ -1044,6 +1079,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000032",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Architecture & Volumes",
     "city": "Lyon",
     "category": "Architecte",
@@ -1073,6 +1109,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000033",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Cabinet Architecte Chapuis",
     "city": "Lyon",
     "category": "Architecte",
@@ -1102,6 +1139,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000034",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Studio Archi Paris",
     "city": "Paris",
     "category": "Cabinet d'architecture",
@@ -1131,6 +1169,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000035",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Agence d'Architecture Nord-Est",
     "city": "Paris",
     "category": "Architecte",
@@ -1160,6 +1199,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000036",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Architecte DPLG Rivière",
     "city": "Paris",
     "category": "Architecte",
@@ -1189,6 +1229,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000037",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Atelier Cube Lille",
     "city": "Lille",
     "category": "Cabinet d'architecture",
@@ -1218,6 +1259,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000038",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Cabinet Marchand Architecte",
     "city": "Bordeaux",
     "category": "Architecte",
@@ -1247,6 +1289,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000039",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Studio Archi Bordeaux",
     "city": "Bordeaux",
     "category": "Architecte",
@@ -1276,6 +1319,7 @@ export const mockProspects: Prospect[] = [
   },
   {
     "id": "a1b2c3d4-0004-4aaa-8bbb-000000000040",
+    "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
     "business_name": "Atelier Garonne Architecture",
     "city": "Bordeaux",
     "category": "Architecte",
@@ -3721,17 +3765,18 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
   };
 }
 
-// A campaign's delivered leads are exactly the mock prospects sharing its
-// keyword and commune -- campaigns are one keyword + one commune by
-// construction (brief 5.2), so that pairing IS the campaign membership
-// here without needing a separate foreign key on Prospect. In the real
-// schema this would be leads.campaign_id; this mock reuses fields that
-// already exist rather than retrofitting one onto all 40 rows for a
-// single screen.
+// A campaign's delivered leads are exactly the prospects whose
+// campaign_id matches -- NOT keyword+city. A lead's city is whatever
+// commune Google reports for that business, and a Lille campaign
+// legitimately returns businesses in Roubaix, Villeneuve-d'Ascq,
+// Lambersart, etc. -- Google ignores administrative boundaries, and
+// that's correct behaviour, not a data leak. Filtering on city would
+// silently drop most of a campaign's real leads with no error, just
+// fewer rows than there should be.
 export async function fetchProspectsForCampaign(id: string): Promise<Prospect[]> {
   const c = campaignStore.find((c) => c.id === id);
   if (c === undefined) return [];
-  return prospectStore.filter((p) => p.keyword === c.keyword && p.city === c.commune.nom);
+  return prospectStore.filter((p) => p.campaign_id === c.id);
 }
 
 // STUB -- deliberately does not create anything. See the v1 file's
