@@ -30,11 +30,18 @@ export default function ReinitialiserPage() {
     // (handled automatically by the Supabase client on page load) --
     // nothing extra needed here to identify which account this is for.
     const { error: updateError } = await supabase.auth.updateUser({ password });
-    setSubmitting(false);
     if (updateError) {
+      setSubmitting(false);
       setError('Une erreur est survenue. Le lien a peut-être expiré -- redemandez-en un.');
       return;
     }
+    // Ends the recovery session -- otherwise the person is still signed
+    // in from the recovery link itself, and "Se connecter" below would
+    // silently skip the login form entirely (proxy.ts correctly
+    // redirects an already-signed-in visitor away from /connexion),
+    // which contradicts what that link says it's about to do.
+    await supabase.auth.signOut();
+    setSubmitting(false);
     setDone(true);
   }
 

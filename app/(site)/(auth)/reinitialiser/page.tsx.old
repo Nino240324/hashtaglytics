@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { resetPassword } from '@/lib/auth-mock';
+import { createClient } from '@/lib/supabase/client';
 
 export default function ReinitialiserPage() {
   const [password, setPassword] = useState('');
@@ -25,8 +25,16 @@ export default function ReinitialiserPage() {
       return;
     }
     setSubmitting(true);
-    await resetPassword(password);
+    const supabase = createClient();
+    // Uses the session established from the recovery link itself
+    // (handled automatically by the Supabase client on page load) --
+    // nothing extra needed here to identify which account this is for.
+    const { error: updateError } = await supabase.auth.updateUser({ password });
     setSubmitting(false);
+    if (updateError) {
+      setError('Une erreur est survenue. Le lien a peut-être expiré -- redemandez-en un.');
+      return;
+    }
     setDone(true);
   }
 
