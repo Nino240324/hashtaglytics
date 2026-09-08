@@ -43,9 +43,19 @@ export function SiteHeader() {
   useEffect(() => {
     setMounted(true);
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setSignedIn(user !== null);
+    // Fires immediately with whatever session exists right now (covers
+    // the initial check), and keeps firing on every actual auth change
+    // afterward -- sign in, sign out, token refresh -- regardless of
+    // whether a navigation happens. A one-time getUser() call here
+    // would go stale the moment auth state changes without a full page
+    // reload, since this component doesn't unmount across client-side
+    // navigation between pages sharing this layout.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedIn(session !== null);
     });
+    return () => subscription.unsubscribe();
   }, []);
 
   function closeDrawer() {
