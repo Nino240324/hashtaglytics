@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import './site-header.css';
 
@@ -16,11 +17,21 @@ const NAV_ITEMS = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   // Checked once on mount, client-side only. A signed-in visitor
   // landing on the public site (e.g. via "Retour au site" from the
   // dashboard) shouldn't be sent back through the login form; they
   // should go straight back in.
   const [signedIn, setSignedIn] = useState(false);
+  // A password-recovery link genuinely establishes a real session --
+  // correct, standard Supabase behaviour, needed so updateUser() works
+  // without asking the person to log in again. But someone landing on
+  // /reinitialiser came here specifically because they don't have
+  // access right now; showing "Mon espace" before they've even chosen
+  // a new password looks like a half-finished, confusing state rather
+  // than the ordinary "you're signed in" moment this button is for
+  // everywhere else.
+  const showSignedIn = signedIn && pathname !== '/reinitialiser';
   // Portal target only exists client-side, after mount -- rendering the
   // portal before that would fail during server rendering, since
   // document.body doesn't exist there.
@@ -122,12 +133,12 @@ export function SiteHeader() {
         </div>
         <div className="nav-drawer-rule" />
         <Link
-          href={signedIn ? '/app/prospects' : '/connexion'}
+          href={showSignedIn ? '/app/prospects' : '/connexion'}
           className="btn btn-primary nav-drawer-cta"
           tabIndex={open ? 0 : -1}
           onClick={closeDrawer}
         >
-          {signedIn ? 'Mon espace' : 'Connexion'}
+          {showSignedIn ? 'Mon espace' : 'Connexion'}
         </Link>
       </div>
     </>
@@ -146,8 +157,8 @@ export function SiteHeader() {
               {item.label}
             </Link>
           ))}
-          <Link href={signedIn ? '/app/prospects' : '/connexion'} className="btn btn-ghost">
-            {signedIn ? 'Mon espace' : 'Connexion'}
+          <Link href={showSignedIn ? '/app/prospects' : '/connexion'} className="btn btn-ghost">
+            {showSignedIn ? 'Mon espace' : 'Connexion'}
           </Link>
         </div>
 
