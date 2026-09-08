@@ -8,12 +8,11 @@
 
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
+import { signOut } from '@/lib/auth-mock';
 
 export function AppSignOut() {
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+  function handleSignOut() {
+    signOut();
     window.location.href = '/connexion';
   }
 

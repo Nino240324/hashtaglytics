@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { isSignedIn } from '@/lib/auth-mock';
 import './site-header.css';
 
 const NAV_ITEMS = [
@@ -16,10 +16,10 @@ const NAV_ITEMS = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
-  // Checked once on mount, client-side only. A signed-in visitor
-  // landing on the public site (e.g. via "Retour au site" from the
-  // dashboard) shouldn't be sent back through the login form; they
-  // should go straight back in.
+  // Checked once on mount, client-side only -- matches the cookie's own
+  // client-readable nature. A signed-in visitor landing on the public
+  // site (e.g. via "Retour au site" from the dashboard) shouldn't be
+  // sent back through the login form; they should go straight back in.
   const [signedIn, setSignedIn] = useState(false);
   // Portal target only exists client-side, after mount -- rendering the
   // portal before that would fail during server rendering, since
@@ -31,10 +31,7 @@ export function SiteHeader() {
 
   useEffect(() => {
     setMounted(true);
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setSignedIn(user !== null);
-    });
+    setSignedIn(isSignedIn());
   }, []);
 
   function closeDrawer() {

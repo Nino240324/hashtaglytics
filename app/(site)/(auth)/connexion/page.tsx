@@ -4,11 +4,10 @@
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from '@/lib/auth-mock';
+import { useSearchParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 function ConnexionForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,14 +26,25 @@ function ConnexionForm() {
       return;
     }
     setSubmitting(true);
-    await signIn({ email, password });
-    setSubmitting(false);
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      setSubmitting(false);
+      setError('E-mail ou mot de passe incorrect.');
+      return;
+    }
+    // window.location.href, not router.push -- a client-side transition
+    // could be served from the router cache without proxy.ts re-checking
+    // the freshly-set session cookie server-side. Same bug class already
+    // found and fixed once for sign-out; applied here too for the other
+    // auth transition rather than leaving it inconsistent.
+    //
     // Preserves the originally-requested /app destination, set by
     // proxy.ts when it redirected here -- falls back to
     // /app/prospects when there was none (e.g. arriving directly at
     // /connexion, not bounced from a protected route).
     const next = searchParams.get('next');
-    router.push(next && next.startsWith('/app') ? next : '/app/prospects');
+    window.location.href = next && next.startsWith('/app') ? next : '/app/prospects';
   }
 
   return (
@@ -80,11 +90,9 @@ function ConnexionForm() {
   );
 }
 
-// useSearchParams() bails out of static prerendering unless wrapped in
-// Suspense -- this is what pnpm build's prerender pass caught and
-// pnpm dev never surfaced. fallback={null} rather than a spinner: the
-// searchParams read only affects where the post-login redirect goes,
-// nothing visible depends on it while it resolves.
+// useSearchParams() requires a Suspense boundary during static
+// generation -- ConnexionForm is the piece that actually needs it,
+// wrapped here rather than in the form itself.
 export default function ConnexionPage() {
   return (
     <Suspense fallback={null}>

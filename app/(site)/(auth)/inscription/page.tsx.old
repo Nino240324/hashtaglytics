@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { signUp } from '@/lib/auth-mock';
 
 export default function InscriptionPage() {
   const router = useRouter();
@@ -31,26 +31,8 @@ export default function InscriptionPage() {
       return;
     }
     setSubmitting(true);
-    const supabase = createClient();
-    // agency_name lands in the new user's raw_user_meta_data -- this is
-    // how the (separately built) database-side handler reads it when
-    // creating the agencies row. No agencies/agency_members row is
-    // created by this step -- that's explicitly database-side work, not
-    // application code.
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { agency_name: agencyName.trim() } },
-    });
+    await signUp({ agencyName: agencyName.trim(), email, password });
     setSubmitting(false);
-    if (signUpError) {
-      setError(
-        signUpError.message.toLowerCase().includes('already registered')
-          ? 'Un compte existe déjà avec cette adresse e-mail.'
-          : 'Une erreur est survenue. Réessayez.'
-      );
-      return;
-    }
     router.push('/verifier');
   }
 

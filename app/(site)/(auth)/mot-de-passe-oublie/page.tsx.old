@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { requestPasswordReset } from '@/lib/auth-mock';
 
 export default function MotDePasseOubliePage() {
   const [email, setEmail] = useState('');
@@ -20,19 +20,7 @@ export default function MotDePasseOubliePage() {
       return;
     }
     setSubmitting(true);
-    const supabase = createClient();
-    // window.location.origin adapts automatically between dev and
-    // production -- but Supabase also needs this domain added to its
-    // own Redirect URLs allowlist in the dashboard, or it'll reject
-    // this value and fall back to the project's default Site URL
-    // regardless of what's passed here.
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reinitialiser`,
-    });
-    // Deliberately doesn't branch on error here -- Supabase returns
-    // success either way by design, so a nonexistent email can't be
-    // used to probe which addresses have accounts. Matches the message
-    // already shown below ("si cette adresse correspond a un compte").
+    await requestPasswordReset(email);
     setSubmitting(false);
     setSent(true);
   }

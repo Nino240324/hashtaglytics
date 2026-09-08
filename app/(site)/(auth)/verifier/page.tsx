@@ -2,22 +2,34 @@
 
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { resendVerificationEmail, demoMarkVerified } from '@/lib/auth-mock';
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
 export default function VerifierPage() {
-  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setEmail(user?.email ?? null);
+    });
+  }, []);
 
   async function handleResend() {
-    await resendVerificationEmail();
+    setError(null);
+    if (!email) {
+      setError("Impossible de déterminer votre adresse e-mail. Reconnectez-vous et réessayez.");
+      return;
+    }
+    const supabase = createClient();
+    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email });
+    if (resendError) {
+      setError('Une erreur est survenue. Réessayez dans un instant.');
+      return;
+    }
     setResent(true);
-  }
-
-  function handleDemoVerify() {
-    demoMarkVerified();
-    router.push('/app/prospects');
   }
 
   return (
@@ -28,21 +40,12 @@ export default function VerifierPage() {
         tableau de bord.
       </p>
 
+      {error && <p className="auth-error">{error}</p>}
       {resent && <p className="auth-success">E-mail renvoyé.</p>}
 
       <button type="button" className="btn btn-ghost" onClick={handleResend}>
         Renvoyer l&rsquo;e-mail
       </button>
-
-      <div className="auth-demo-note">
-        <p>
-          Aucun e-mail réel n&rsquo;est envoyé dans cette maquette. Ce bouton simule le clic sur le lien de
-          vérification.
-        </p>
-        <button type="button" className="btn" onClick={handleDemoVerify}>
-          Simuler la vérification (démo)
-        </button>
-      </div>
     </>
   );
 }

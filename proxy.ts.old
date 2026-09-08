@@ -7,29 +7,16 @@
 //   signed in  + /inscription -> /app/prospects
 //   unverified + /app/*       -> /verifier
 //
-// Session check is real Supabase Auth via getUser() -- NOT getSession(),
-// which only reads the cookie's presence without validating it against
-// Supabase, so a forged cookie would pass. getUser() verifies it, and
-// as a side effect refreshes the session if the access token is close
-// to expiring (see lib/supabase/middleware.ts for how that refresh is
-// captured).
+// STUB: checks a mock cookie (see lib/auth-mock.ts), not a real Supabase
+// session. Swap the isSignedIn/isVerified checks for real session
+// validation (e.g. @supabase/ssr's getUser(), called against the request
+// cookies) when auth is wired up for real -- the redirect logic itself
+// doesn't need to change, only what it reads to decide.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createMiddlewareClient } from '@/lib/supabase/middleware';
 
-// A session refresh during getUser() lands on `response`'s cookies, not
-// on whatever response this function ends up actually returning (a
-// redirect, built separately below). Without copying them across, a
-// refresh that happened on this exact request would be silently
-// dropped -- not a broken session, just one fewer request's worth of
-// refresh headroom than it should have had.
-function withRefreshedCookies(target: NextResponse, refreshed: NextResponse) {
-  refreshed.cookies.getAll().forEach((cookie) => target.cookies.set(cookie));
-  return target;
-}
-
-export async function proxy(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   // Read alongside pathname per Opus -- unused for now, since the
   // single-domain decision means nothing branches on it today. void
@@ -38,14 +25,8 @@ export async function proxy(request: NextRequest) {
   // decision is ever reconsidered later, rather than needing to be
   // added in then.
   void request.nextUrl.hostname;
-
-  const { supabase, response } = createMiddlewareClient(request);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const isSignedIn = user !== null;
-  const isVerified = user?.email_confirmed_at != null;
+  const isSignedIn = request.cookies.get('mock_session')?.value === '1';
+  const isVerified = request.cookies.get('mock_verified')?.value === '1';
 
   const isAppRoute = pathname.startsWith('/app');
   const isSignedInOnlyRedirect = pathname === '/connexion' || pathname === '/inscription';
@@ -58,7 +39,7 @@ export async function proxy(request: NextRequest) {
     // stray params from the original URL attached too.
     url.search = '';
     url.searchParams.set('next', pathname);
-    return withRefreshedCookies(NextResponse.redirect(url), response);
+    return NextResponse.redirect(url);
   }
 
   if (isAppRoute && isSignedIn && !isVerified) {
@@ -68,7 +49,7 @@ export async function proxy(request: NextRequest) {
     // explicitly, not just changing pathname and hoping nothing was
     // attached to the original request.
     url.search = '';
-    return withRefreshedCookies(NextResponse.redirect(url), response);
+    return NextResponse.redirect(url);
   }
 
   if (isSignedInOnlyRedirect && isSignedIn) {
@@ -79,10 +60,10 @@ export async function proxy(request: NextRequest) {
     // while already signed in cloned that query string forward into a
     // redirect where it no longer meant anything.
     url.search = '';
-    return withRefreshedCookies(NextResponse.redirect(url), response);
+    return NextResponse.redirect(url);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 // /mot-de-passe-oublie and /reinitialiser are deliberately NOT in this

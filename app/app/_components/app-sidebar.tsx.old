@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { signOut } from '@/lib/auth-mock';
 
 const NAV_ITEMS = [
   { href: '/app/prospects', label: 'Prospects' },
@@ -43,10 +43,9 @@ export function AppSidebar() {
     triggerRef.current?.focus();
   }
 
-  async function handleSignOut() {
+  function handleSignOut() {
     closeDrawer();
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    signOut();
     window.location.href = '/connexion';
   }
 
