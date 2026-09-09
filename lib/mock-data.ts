@@ -3324,6 +3324,94 @@ function compareProspects(a: Prospect, b: Prospect, sort: ProspectSort): number 
   return sort.dir === 'asc' ? diff : -diff;
 }
 
+// Shared by fetchProspects and fetchProspectStatusCounts, which the spec
+// explicitly says fetch against "the same filters" -- one helper instead
+// of duplicating six conditions across two functions.
+//
+// CITY_SERVICE_AREA is not in the spec's filter table, but it's a real,
+// exported constant this app's UI actually offers as a filter option
+// (prospects/page.tsx) -- dropping it here would silently regress a real
+// feature, not just leave a spec gap unfilled, so it's preserved as an
+// IS NULL check, the same pattern as email: 'aucun' below.
+function applyProspectFilters(query: any, f: ProspectFilters) {
+  if (f.keyword !== 'tous') query = query.eq('keyword', f.keyword);
+
+  if (f.city === CITY_SERVICE_AREA) {
+    query = query.is('city', null);
+  } else if (f.city !== 'toutes') {
+    query = query.eq('city', f.city);
+  }
+
+  // claim must not match null -- is_claimed IS NULL is a third state
+  // (provider never returned the field), not "not revendiquee". .eq()
+  // already excludes nulls in Postgres; no .or() needed or wanted here.
+  if (f.claim === 'revendiquee') query = query.eq('is_claimed', true);
+  if (f.claim === 'non_revendiquee') query = query.eq('is_claimed', false);
+
+  if (f.website === 'own') query = query.eq('website_kind', 'own');
+  if (f.website === 'none') query = query.eq('website_kind', 'none');
+  if (f.website === 'not_controlled') {
+    query = query.in('website_kind', ['booking_platform', 'social', 'directory']);
+  }
+
+  if (f.email === 'verifie') query = query.eq('email_status', 'deliverable');
+  if (f.email === 'present_non_verifie') {
+    query = query.in('email_status', ['risky', 'unknown', 'pending_verification']);
+  }
+  // Filters on email IS NULL, not email_status -- a lead awaiting
+  // enrichment has both null and belongs here; the agency has no address
+  // for it either way. email_checked_at (display-only) is what
+  // distinguishes "checked, none found" from "not yet checked".
+  if (f.email === 'aucun') query = query.is('email', null);
+
+  const q = f.search.trim();
+  if (q !== '') query = query.ilike('business_name', `%${q}%`);
+
+  return query;
+}
+
+function applyTabFilter(query: any, tab: ProspectStatusTab) {
+  switch (tab) {
+    case 'tous':
+      return query;
+    case 'a_traiter':
+      return query.is('outcome', null);
+    case 'en_cours':
+      return query.eq('outcome', 'in_progress');
+    case 'sans_reponse':
+      return query.eq('outcome', 'no_response');
+    case 'gagnes':
+      return query.eq('outcome', 'won');
+    // Maps to 'lost' -- the database CHECK allows exactly
+    // won | lost | no_response | in_progress; there is no 'ignored' value.
+    case 'ignores':
+      return query.eq('outcome', 'lost');
+  }
+}
+
+// potentiel is the one sort key that doesn't map straight to a column:
+// the UI shows 100 - seo_score as "Potentiel", so potentiel descending
+// means seo_score ASCENDING (lowest score = most opportunity). Get this
+// backwards and the list shows the least interesting leads first, with
+// no error anywhere to catch it.
+//
+// nullsFirst only for the default view (potentiel, desc) -- in a
+// campaign's first minute every lead has seo_score === null (not yet
+// enriched). Nulls-last there would render as an empty list exactly
+// when the progress screen exists to show leads arriving. Every other
+// case, including potentiel ascending, keeps nulls last -- this looks
+// asymmetric and is deliberate, not a mistake.
+function applyProspectSort(query: any, sort: ProspectSort) {
+  const col = sort.key === 'potentiel' ? 'seo_score' : sort.key;
+  const ascending = sort.key === 'potentiel' ? sort.dir === 'desc' : sort.dir === 'asc';
+  const nullsFirst = sort.key === 'potentiel' && sort.dir === 'desc';
+  // Deterministic tiebreaker -- without it, equal-scoring rows can land
+  // in a different order per page, so a lead could appear twice or not
+  // at all across pagination. The mock never showed this since a JS
+  // sort is stable; a Postgres query with ties is not.
+  return query.order(col, { ascending, nullsFirst }).order('id');
+}
+
 export async function fetchProspects(params: {
   filters: ProspectFilters;
   tab: ProspectStatusTab;
@@ -3331,21 +3419,40 @@ export async function fetchProspects(params: {
   page: number;
   pageSize: number;
 }): Promise<{ rows: Prospect[]; totalCount: number }> {
-  if (MOCK_FREE_TIER_EMPTY_AGENCY) return { rows: [], totalCount: 0 };
-  const filtered = prospectStore.filter((p) => matchesFilters(p, params.filters));
-  const tabbed =
-    params.tab === 'tous' ? filtered : filtered.filter((p) => getProspectStatusTab(p) === params.tab);
-  const sorted = [...tabbed].sort((a, b) => compareProspects(a, b, params.sort));
-  const start = (params.page - 1) * params.pageSize;
-  return {
-    rows: sorted.slice(start, start + params.pageSize),
-    totalCount: tabbed.length,
-  };
+  const supabase = createClient();
+  let query = supabase.from('prospect_view').select('*', { count: 'exact' });
+  query = applyProspectFilters(query, params.filters);
+  query = applyTabFilter(query, params.tab);
+  query = applyProspectSort(query, params.sort);
+  const from = (params.page - 1) * params.pageSize;
+  query = query.range(from, from + params.pageSize - 1);
+
+  const { data, error, count } = await query;
+  if (error) {
+    console.error('fetchProspects query failed', error);
+  }
+  return { rows: (data as Prospect[] | null) ?? [], totalCount: count ?? 0 };
 }
 
+// Six head-only queries (no rows, count only), one per tab, run together
+// rather than fetching every row and counting in JS -- that would defeat
+// pagination and pull the agency's entire lead list into the browser
+// just to render tab badges.
 export async function fetchProspectStatusCounts(
   filters: ProspectFilters,
 ): Promise<Record<ProspectStatusTab, number>> {
+  const supabase = createClient();
+  const tabs: ProspectStatusTab[] = ['tous', 'a_traiter', 'en_cours', 'sans_reponse', 'gagnes', 'ignores'];
+
+  const results = await Promise.all(
+    tabs.map((tab) => {
+      let query = supabase.from('prospect_view').select('id', { count: 'exact', head: true });
+      query = applyProspectFilters(query, filters);
+      query = applyTabFilter(query, tab);
+      return query;
+    }),
+  );
+
   const counts: Record<ProspectStatusTab, number> = {
     tous: 0,
     a_traiter: 0,
@@ -3354,30 +3461,66 @@ export async function fetchProspectStatusCounts(
     gagnes: 0,
     ignores: 0,
   };
-  if (MOCK_FREE_TIER_EMPTY_AGENCY) return counts;
-  const filtered = prospectStore.filter((p) => matchesFilters(p, filters));
-  for (const p of filtered) {
-    counts.tous += 1;
-    counts[getProspectStatusTab(p)] += 1;
-  }
+  tabs.forEach((tab, i) => {
+    if (results[i].error) {
+      console.error(`fetchProspectStatusCounts: ${tab} query failed`, results[i].error);
+    }
+    counts[tab] = results[i].count ?? 0;
+  });
   return counts;
 }
 
+// The only write in this pass. Both columns, always -- a CHECK
+// constraint (leads_outcome_at_chk) requires outcome_at whenever
+// outcome is set, so writing outcome alone would fail.
+//
+// Writes to leads, not prospect_view -- the view is read-only. The
+// grant here is column-level (outcome, outcome_at, outcome_notes and
+// nothing else); attempting to update any other column is refused by
+// the database on purpose, so a client can't rewrite delivered_at or
+// email through this path.
 export async function updateProspectOutcome(
   id: string,
   outcome: Prospect['outcome'],
 ): Promise<void> {
-  const row = prospectStore.find((p) => p.id === id);
-  if (row) row.outcome = outcome;
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('leads')
+    .update({ outcome, outcome_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    console.error('updateProspectOutcome: update failed', error);
+  }
 }
 
-export function getAvailableKeywords(): string[] {
-  return Array.from(new Set(mockProspects.map((p) => p.keyword))).sort();
+// Now async against real data -- callers updated accordingly
+// (prospects/page.tsx). No DISTINCT in PostgREST, so dedupe happens
+// client-side; fine at ~107 rows, would become an RPC if that ever
+// changes.
+export async function getAvailableKeywords(): Promise<string[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('prospect_view').select('keyword');
+  if (error) {
+    console.error('getAvailableKeywords query failed', error);
+    return [];
+  }
+  return Array.from(new Set((data as { keyword: string }[]).map((r) => r.keyword))).sort();
 }
 
-export function getAvailableCities(): string[] {
+// city can be null -- a service-area business hiding its address, not a
+// city literally called "null". Filtered out before the dropdown ever
+// sees it.
+export async function getAvailableCities(): Promise<string[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('prospect_view').select('city');
+  if (error) {
+    console.error('getAvailableCities query failed', error);
+    return [];
+  }
   return Array.from(
-    new Set(mockProspects.filter((p) => p.city !== null).map((p) => p.city as string)),
+    new Set(
+      (data as { city: string | null }[]).filter((r) => r.city !== null).map((r) => r.city as string),
+    ),
   ).sort();
 }
 
@@ -3848,9 +3991,12 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
 // silently drop most of a campaign's real leads with no error, just
 // fewer rows than there should be.
 export async function fetchProspectsForCampaign(id: string): Promise<Prospect[]> {
-  const c = campaignStore.find((c) => c.id === id);
-  if (c === undefined) return [];
-  return prospectStore.filter((p) => p.campaign_id === c.id);
+  const supabase = createClient();
+  const { data, error } = await supabase.from('prospect_view').select('*').eq('campaign_id', id);
+  if (error) {
+    console.error('fetchProspectsForCampaign query failed', error);
+  }
+  return (data as Prospect[] | null) ?? [];
 }
 
 // STUB -- deliberately does not create anything. See the v1 file's
