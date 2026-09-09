@@ -47,11 +47,6 @@
 // logic that remains once rather than letting each component re-derive
 // it.
 
-// Only import this file needs -- everything else here is pure mock
-// data with no external dependencies. Used solely by
-// fetchAgencyPlanUsage, the one function converted to a real query.
-import { createClient } from '@/lib/supabase/client';
-
 export type Prospect = {
   id: string;
   business_name: string;
@@ -3484,64 +3479,8 @@ const mockPlanUsage: AgencyPlanUsage = {
 
 // Standalone -- the app header needs just this, on every screen, without
 // pulling the full campaigns list along with it.
-//
-// REAL QUERY, converted per Opus's instructions as the one function
-// proving the full chain works: session -> JWT -> auth.uid() ->
-// agency_members -> RLS policy. Every other function in this file is
-// still mock data -- deliberately not converted yet.
-//
-// NO agency_id filter anywhere in these three queries -- that's the
-// entire point. RLS resolves the current user's agency from
-// agency_members and adds that filter itself; writing .eq('agency_id',
-// ...) here would make this prove nothing, since it would return the
-// right row whether the policies actually work or not.
-//
-// .single() (not .maybeSingle()) on the two row-fetches is deliberate:
-// it makes a broken chain surface as a loud, distinct error rather than
-// silently returning undefined -- which would look identical to "this
-// agency genuinely has no data" to anything reading the result. Telling
-// those two apart is the entire purpose of this step, per Opus.
 export async function fetchAgencyPlanUsage(): Promise<AgencyPlanUsage> {
-  const supabase = createClient();
-  const now = new Date().toISOString();
-
-  const [quotaResult, agencyResult, campaignsResult] = await Promise.all([
-    supabase
-      .from('lead_quota_periods')
-      .select('leads_quota, leads_used, period_end')
-      .lte('period_start', now)
-      .gt('period_end', now)
-      .single(),
-    // Relies on agencies -> subscription_tiers via subscription_tier_id
-    // (the FK Supabase's nested-select syntax auto-joins on). Assumes
-    // this resolves to a single nested object, not an array -- correct
-    // for a belongs-to relationship, but if that assumption is wrong
-    // it'll surface immediately as a shape mismatch while testing this,
-    // which is exactly what this diagnostic step is for.
-    supabase.from('agencies').select('subscription_tiers(tier_name, max_active_campaigns, max_leads_per_month)').single(),
-    supabase.from('campaigns').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
-  ]);
-
-  if (quotaResult.error) {
-    console.error('fetchAgencyPlanUsage: lead_quota_periods query failed', quotaResult.error);
-  }
-  if (agencyResult.error) {
-    console.error('fetchAgencyPlanUsage: agencies/subscription_tiers query failed', agencyResult.error);
-  }
-  if (campaignsResult.error) {
-    console.error('fetchAgencyPlanUsage: campaigns count query failed', campaignsResult.error);
-  }
-
-  const tier = (agencyResult.data as any)?.subscription_tiers;
-
-  return {
-    tierName: tier?.tier_name ?? '',
-    maxActiveCampaigns: tier?.max_active_campaigns ?? null,
-    activeCampaigns: campaignsResult.count ?? 0,
-    leads_delivered_this_period: (quotaResult.data as any)?.leads_used ?? 0,
-    max_leads_per_month: tier?.max_leads_per_month ?? null,
-    period_end: (quotaResult.data as any)?.period_end ?? '',
-  };
+  return MOCK_FREE_TIER_EMPTY_AGENCY ? mockFreeTierPlanUsage : mockPlanUsage;
 }
 
 // -- Billing (brief 5.5) -------------------------------------------------
