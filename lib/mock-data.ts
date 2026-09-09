@@ -3518,7 +3518,9 @@ export async function fetchAgencyPlanUsage(): Promise<AgencyPlanUsage> {
     // for a belongs-to relationship, but if that assumption is wrong
     // it'll surface immediately as a shape mismatch while testing this,
     // which is exactly what this diagnostic step is for.
-    supabase.from('agencies').select('subscription_tiers(tier_name, max_active_campaigns, max_leads_per_month)').single(),
+    //
+    // max_leads_per_month deliberately NOT selected here -- see below.
+    supabase.from('agencies').select('subscription_tiers(tier_name, max_active_campaigns)').single(),
     supabase.from('campaigns').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
   ]);
 
@@ -3536,10 +3538,21 @@ export async function fetchAgencyPlanUsage(): Promise<AgencyPlanUsage> {
 
   return {
     tierName: tier?.tier_name ?? '',
+    // max_active_campaigns correctly comes from subscription_tiers --
+    // enforced live by a trigger, not snapshotted into a period, so the
+    // tier's current value genuinely is the right source, unlike the
+    // lead quota below.
     maxActiveCampaigns: tier?.max_active_campaigns ?? null,
     activeCampaigns: campaignsResult.count ?? 0,
     leads_delivered_this_period: (quotaResult.data as any)?.leads_used ?? 0,
-    max_leads_per_month: tier?.max_leads_per_month ?? null,
+    // Bug fixed per Opus: this must come from lead_quota_periods.leads_quota,
+    // NOT subscription_tiers.max_leads_per_month. A quota period keeps the
+    // quota it was CREATED with -- a mid-period tier upgrade doesn't
+    // retroactively raise it. try_consume_quota reads leads_quota from
+    // this same table and never consults the tier, so showing the tier's
+    // number here would let the dashboard promise more headroom than the
+    // database actually enforces.
+    max_leads_per_month: (quotaResult.data as any)?.leads_quota ?? null,
     period_end: (quotaResult.data as any)?.period_end ?? '',
   };
 }
