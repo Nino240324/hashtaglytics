@@ -3470,27 +3470,6 @@ export async function fetchProspectStatusCounts(
   return counts;
 }
 
-// Distinguishes "no data at all" from "no results for the current
-// filters" -- fixes the pre-existing bug where hasAnyProspectsEver in
-// prospects/page.tsx was declared but never set (null !== false, so
-// that branch could never trigger). Deliberately unfiltered and
-// ignores the tab -- if this respected the current filters, a search
-// matching nothing would look identical to "this agency has never had
-// any prospects at all," showing the wrong empty state to an existing
-// customer. Only needs to tell zero from non-zero, so a head-only count
-// is enough; run once on mount, not on every filter change.
-export async function fetchHasAnyProspects(): Promise<boolean> {
-  const supabase = createClient();
-  const { count, error } = await supabase
-    .from('prospect_view')
-    .select('id', { count: 'exact', head: true });
-  if (error) {
-    console.error('fetchHasAnyProspects query failed', error);
-    return false;
-  }
-  return (count ?? 0) > 0;
-}
-
 // The only write in this pass. Both columns, always -- a CHECK
 // constraint (leads_outcome_at_chk) requires outcome_at whenever
 // outcome is set, so writing outcome alone would fail.
@@ -3576,36 +3555,15 @@ export type CommuneSearchResult = {
 // Requires 2+ characters: one character matches thousands of rows and
 // helps nobody.
 export async function searchCommunes(query: string, limit = 8): Promise<CommuneSearchResult> {
-  const q = query.trim();
+  const q = normaliseQuery(query);
   if (q.length < 2) return { results: [], totalMatches: 0 };
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc('search_communes', { p_query: q, p_limit: limit });
-  if (error) {
-    console.error('searchCommunes RPC failed', error);
-    return { results: [], totalMatches: 0 };
-  }
-  const rows = (data as any[]) ?? [];
-  return {
-    // total_matches is repeated on every row (how one query returns both
-    // the page and the true count against all 34,746 communes) -- stripped
-    // out here since it's not part of the Commune shape.
-    results: rows.map(({ total_matches, ...c }) => c as Commune),
-    totalMatches: rows[0]?.total_matches ?? 0,
-  };
+  const matches = mockCommunes.filter((c) => c.slug.includes(q));
+  const sorted = [...matches].sort((a, b) => (b.population ?? 0) - (a.population ?? 0));
+  return { results: sorted.slice(0, limit), totalMatches: matches.length };
 }
 
 export async function getCommuneByCodeInsee(code: string): Promise<Commune | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('communes')
-    .select('code_insee, nom, slug, dept_code, region_name, population')
-    .eq('code_insee', code)
-    .maybeSingle();
-  if (error) {
-    console.error('getCommuneByCodeInsee query failed', error);
-    return null;
-  }
-  return (data as Commune | null) ?? null;
+  return mockCommunes.find((c) => c.code_insee === code) ?? null;
 }
 
 // -- Campaigns ------------------------------------------------------------
@@ -3891,129 +3849,18 @@ export async function updateBrandInfo(
   return { ok: true, message: 'Enregistré localement. La sauvegarde réelle n\u2019est pas encore câblée.' };
 }
 
-// Placeholder used only when a campaign has neither a linked commune
-// NOR an active region row -- should be rare in practice, but a safe
-// final fallback rather than crashing.
-const NO_COMMUNE_FALLBACK: Commune = {
-  code_insee: '',
-  nom: 'France',
-  slug: '',
-  dept_code: '',
-  region_name: 'France',
-  population: null,
-};
-
-// Shared by fetchCampaignsOverview and fetchCampaign -- both run the same
-// nested select and need the same three flattening steps applied to each
-// row, so this is written once rather than duplicated.
-function mapCampaignRow(row: any, businessesFound: number): Campaign {
-  // Fallback chain per Opus: commune -> active region -> "France".
-  // "France" alone would discard something real -- a region-scoped
-  // campaign was genuinely scoped to e.g. Hauts-de-France, and an
-  // agency looking at their own history should see that, not a country.
-  const communeRow = row.campaign_communes?.[0]?.communes;
-  if (communeRow) {
-    return {
-      id: row.id,
-      keyword: row.campaign_keywords?.[0]?.keyword ?? '',
-      commune: communeRow,
-      status: row.status,
-      total_grids: row.total_grids,
-      completed_grids: row.completed_grids,
-      businesses_found: businessesFound,
-      created_at: row.created_at,
-      completed_at: row.completed_at,
-    };
-  }
-  // A deactivated region row should not be displayed -- filtered
-  // client-side rather than in the query itself, to avoid the risk of a
-  // nested Postgrest filter silently excluding the whole campaign row
-  // if written wrong, which would be a much worse bug than showing the
-  // wrong fallback name.
-  const activeRegion = (row.campaign_regions as { region_name: string; status: string }[] | undefined)?.find(
-    (r) => r.status === 'active',
-  );
-  const regionName = activeRegion?.region_name ?? 'France';
-  return {
-    id: row.id,
-    keyword: row.campaign_keywords?.[0]?.keyword ?? '',
-    commune: { ...NO_COMMUNE_FALLBACK, nom: regionName, region_name: regionName },
-    status: row.status,
-    total_grids: row.total_grids,
-    completed_grids: row.completed_grids,
-    businesses_found: businessesFound,
-    created_at: row.created_at,
-    completed_at: row.completed_at,
-  };
-}
-
-// businesses_found isn't a column on campaigns -- it's a sum across that
-// campaign's grid rows. One extra query for the whole list (keyed by
-// campaign_id), not one query per campaign.
-async function fetchBusinessesFoundByCampaign(
-  supabase: ReturnType<typeof createClient>,
-  campaignIds: string[],
-): Promise<Record<string, number>> {
-  if (campaignIds.length === 0) return {};
-  const { data, error } = await supabase
-    .from('campaign_grids')
-    .select('campaign_id, businesses_found')
-    .in('campaign_id', campaignIds);
-  if (error) {
-    console.error('fetchBusinessesFoundByCampaign query failed', error);
-    return {};
-  }
-  const sums: Record<string, number> = {};
-  for (const row of (data as { campaign_id: string; businesses_found: number }[]) ?? []) {
-    sums[row.campaign_id] = (sums[row.campaign_id] ?? 0) + (row.businesses_found ?? 0);
-  }
-  return sums;
-}
-
-const CAMPAIGN_SELECT = `
-  id, status, total_grids, completed_grids, created_at, completed_at,
-  campaign_keywords ( keyword ),
-  campaign_communes ( communes ( code_insee, nom, slug, dept_code, region_name, population ) ),
-  campaign_regions ( region_name, status )
-`;
-
 export async function fetchCampaignsOverview(): Promise<{
   campaigns: Campaign[];
   planUsage: AgencyPlanUsage;
 }> {
-  const supabase = createClient();
-  // No agency_id filter -- RLS scopes this to the current agency.
-  const { data, error } = await supabase
-    .from('campaigns')
-    .select(CAMPAIGN_SELECT)
-    .order('created_at', { ascending: false });
-  if (error) {
-    console.error('fetchCampaignsOverview query failed', error);
-  }
-  const rows = (data as any[]) ?? [];
-  const sums = await fetchBusinessesFoundByCampaign(
-    supabase,
-    rows.map((r) => r.id),
-  );
   return {
-    campaigns: rows.map((row) => mapCampaignRow(row, sums[row.id] ?? 0)),
+    campaigns: MOCK_FREE_TIER_EMPTY_AGENCY ? [] : campaignStore,
     planUsage: await fetchAgencyPlanUsage(),
   };
 }
 
 export async function fetchCampaign(id: string): Promise<Campaign | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('campaigns')
-    .select(CAMPAIGN_SELECT)
-    .eq('id', id)
-    .maybeSingle();
-  if (error) {
-    console.error('fetchCampaign query failed', error);
-  }
-  if (data === null || data === undefined) return null;
-  const sums = await fetchBusinessesFoundByCampaign(supabase, [id]);
-  return mapCampaignRow(data, sums[id] ?? 0);
+  return campaignStore.find((c) => c.id === id) ?? null;
 }
 
 // -- Campaign progress polling (brief 5.3, corrected by Opus) -----------
@@ -4093,81 +3940,45 @@ export function computeCampaignFunnel(
 }
 
 export async function fetchCampaignProgress(id: string): Promise<CampaignProgress | null> {
-  const supabase = createClient();
+  const c = campaignStore.find((c) => c.id === id);
+  if (c === undefined) return null;
 
-  // Bounded by this campaign's own total_grids (40-150 rows for a town
-  // campaign) -- never query business_grid_positions or anything
-  // unbounded here. This runs every 3 seconds; an unbounded query on a
-  // 3s poll is the mistake that would make the whole site struggle.
-  const scanQuery = supabase
-    .from('campaign_grids')
-    .select('processed_at, status, businesses_found')
-    .eq('campaign_id', id);
-
-  // Three separate counts, not one query with all three conditions
-  // chained -- chaining would only answer "how many are both enriched
-  // AND delivered". campaign_id assumed to exist directly on leads, per
-  // the spec's own example -- if this specific query fails, that's the
-  // one thing to check: leads may only carry campaign_grid_id, needing
-  // a join through campaign_grids instead. No way to confirm the live
-  // schema from here, so this is built as given and will fail loudly
-  // (logged below) rather than silently if that assumption is wrong.
-  const qualifiedQuery = supabase
-    .from('leads')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id);
-  const enrichedQuery = supabase
-    .from('leads')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('mbi_fetched_at', 'is', null);
-  const deliveredQuery = supabase
-    .from('leads')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('delivered_at', 'is', null);
-
-  const [scanResult, qualifiedResult, enrichedResult, deliveredResult] = await Promise.all([
-    scanQuery,
-    qualifiedQuery,
-    enrichedQuery,
-    deliveredQuery,
-  ]);
-
-  if (scanResult.error) {
-    console.error('fetchCampaignProgress: campaign_grids query failed', scanResult.error);
-  }
-  if (qualifiedResult.error) {
-    console.error('fetchCampaignProgress: qualified count failed', qualifiedResult.error);
-  }
-  if (enrichedResult.error) {
-    console.error('fetchCampaignProgress: enriched count failed', enrichedResult.error);
-  }
-  if (deliveredResult.error) {
-    console.error('fetchCampaignProgress: delivered count failed', deliveredResult.error);
+  // Advances state as a SIDE EFFECT of being polled -- this is the only
+  // way to fake movement without a real backend behind it. The real
+  // endpoint is a pure read; the actual advancement happens independently
+  // in the background via the real scanning pipeline, not because
+  // something polled it. Do not read this as a description of how the
+  // real endpoint should behave.
+  if (c.status === 'in_progress' && c.completed_grids < c.total_grids) {
+    // Density (businesses per grid point) is derived from the campaign's
+    // OWN numbers where it already has some progress, so the rate stays
+    // consistent with what's already shown on /app/campagnes; a fixed
+    // default covers a campaign starting from zero, where that ratio
+    // doesn't exist yet.
+    const density = c.completed_grids > 0 ? c.businesses_found / c.completed_grids : 3.4;
+    const increment = Math.max(1, Math.ceil(c.total_grids / POLLS_TO_COMPLETE));
+    c.completed_grids = Math.min(c.total_grids, c.completed_grids + increment);
+    c.businesses_found = Math.round(c.completed_grids * density);
   }
 
-  const gridRows = (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
-  if (gridRows.length === 0) return null;
+  const total = c.total_grids;
+  const scanned = c.completed_grids;
+  // Tapers toward 0 as scanning finishes -- an arbitrary but plausible
+  // concurrency figure, never exceeding what's actually left to scan.
+  const inFlight = scanned >= total ? 0 : Math.min(8, total - scanned);
+  const scanPct = total > 0 ? scanned / total : 0;
 
-  const total = gridRows.length;
-  // processed_at, NEVER status -- a row can carry status='completed'
-  // with processed_at still null. complete_grid_point is the only thing
-  // that sets processed_at, so a timestamp means it genuinely happened;
-  // counting by status would overstate progress on rows that never
-  // actually scanned.
-  const scanned = gridRows.filter((r) => r.processed_at !== null).length;
-  const inFlight = gridRows.filter((r) => r.status === 'in_progress').length;
-  const businesses = gridRows.reduce((sum, r) => sum + (r.businesses_found ?? 0), 0);
+  const matching = prospectStore.filter((p) => p.keyword === c.keyword && p.city === c.commune.nom);
+  const funnel = computeCampaignFunnel(c.businesses_found, scanPct, matching.length);
 
   return {
     total,
     scanned,
     inFlight,
-    businesses,
-    leadsQualified: qualifiedResult.count ?? 0,
-    leadsEnriched: enrichedResult.count ?? 0,
-    leadsDelivered: deliveredResult.count ?? 0,
+    businesses: c.businesses_found,
+    leadsQualified: funnel.leadsQualified,
+    leadsEnriched: funnel.leadsEnriched,
+    leadsDelivered: funnel.leadsDelivered,
   };
 }
 
@@ -4188,37 +3999,20 @@ export async function fetchProspectsForCampaign(id: string): Promise<Prospect[]>
   return (data as Prospect[] | null) ?? [];
 }
 
-// Agency is NEVER a parameter here -- resolved from auth.uid() inside
-// create_campaign itself. A client-supplied agency_id could create
-// campaigns in someone else's account, spending their quota and real
-// money on scans.
-//
-// One RPC, not four client-side writes (campaign, commune, keyword,
-// grid rows) -- a failure between any two of those leaves wreckage that
-// looks like a working campaign (a campaign slot burnt with no
-// commune, or one that sits at 0/0 forever). The database function does
-// all four in one transaction.
+// STUB -- deliberately does not create anything. See the v1 file's
+// equivalent comment for the full real-implementation TODO list (advisory
+// lock, server-side re-check, keyword normalisation, grid sweep, n8n
+// webhook) -- unchanged in spirit, now gated by max_active_campaigns
+// (enforce_max_campaigns) rather than max_keywords/max_regions.
 export async function createCampaign(input: {
   keyword: string;
   codeInsee: string;
-}): Promise<{ ok: true; campaignId: string; gridPoints: number } | { ok: false; message: string }> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc('create_campaign', {
-    p_keyword: input.keyword,
-    p_code_insee: input.codeInsee,
-  });
-  if (error) {
-    // The two quota/limit errors are written to be shown verbatim to the
-    // user (French, complete sentences) -- shown as-is rather than
-    // replaced with a generic failure message. Anything else (unknown
-    // commune, empty keyword) is developer-facing and shouldn't reach a
-    // user in practice, since the form prevents both.
-    return { ok: false, message: error.message };
-  }
-  const row = (data as { campaign_id: string; grid_points: number; keyword: string }[])?.[0];
-  if (row === undefined) {
-    console.error('createCampaign: RPC succeeded but returned no row', data);
-    return { ok: false, message: 'Une erreur est survenue. Réessayez.' };
-  }
-  return { ok: true, campaignId: row.campaign_id, gridPoints: row.grid_points };
+}): Promise<{ ok: true; message: string }> {
+  // eslint-disable-next-line no-console
+  console.log('[stub] createCampaign called with', input, '-- no real effect.');
+  return {
+    ok: true,
+    message:
+      "Formulaire enregistre localement. La creation reelle de campagne (quota, grille, n8n) n'est pas encore cablee.",
+  };
 }

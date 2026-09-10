@@ -4,7 +4,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   createCampaign,
@@ -99,7 +98,6 @@ function CampaignMenu() {
 }
 
 export default function CampagnesPage() {
-  const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [planUsage, setPlanUsage] = useState<AgencyPlanUsage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,16 +150,6 @@ export default function CampagnesPage() {
         keyword: keywordInput.trim().toLowerCase(),
         codeInsee: selectedCommune.code_insee,
       });
-      if (result.ok) {
-        // That's the screen the whole flow exists for -- no need to show
-        // a confirmation message first, since the user lands directly on
-        // the new campaign's own progress screen.
-        router.push(`/app/campagnes/${result.campaignId}`);
-        return;
-      }
-      // Shown verbatim -- the two quota/limit messages are written in
-      // complete, user-facing French sentences specifically to be
-      // displayed as-is, not replaced with a generic failure message.
       setConfirmation(result.message);
     } finally {
       setSubmitting(false);
@@ -237,11 +225,8 @@ export default function CampagnesPage() {
       ) : campaigns.length === 0 ? (
         <div className="empty-state campaigns-empty-state">
           <h2>Aucune campagne pour l&rsquo;instant.</h2>
-          {planUsage?.tierName === 'free' ? (
-            <p>
-              Votre recherche gratuite : un métier, une ville,{' '}
-              {planUsage.max_leads_per_month ?? 10} prospects.
-            </p>
+          {planUsage?.tierName === 'Free' ? (
+            <p>Votre recherche gratuite : un métier, une ville, 20 prospects.</p>
           ) : (
             <p>
               Choisissez un métier et une ville. Nous scannons Google Maps et vous livrons des

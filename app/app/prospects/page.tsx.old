@@ -769,8 +769,12 @@ function ProspectsPageInner() {
     setExpandedId((prev) => (prev === id ? null : id));
   }
 
-  const keywords = getAvailableKeywords();
-  const cities = getAvailableCities();
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  useEffect(() => {
+    getAvailableKeywords().then(setKeywords);
+    getAvailableCities().then(setCities);
+  }, []);
 
   // Debounce the search box only — the select filters change on discrete
   // user actions and can fire immediately, but typing shouldn't trigger a
