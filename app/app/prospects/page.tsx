@@ -96,6 +96,43 @@ function renderStars(rating: number): string {
   return '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
 }
 
+// "13e -> 55e" when the business's rank varied across grid points,
+// "42e" alone when it didn't (~29% of leads, seen at one point only --
+// normal, not missing data), "—" only when never measured at all.
+// Never renders "42e -> 42e" -- that reads as a bug.
+function formatRankRange(p: Prospect): string {
+  if (p.best_rank === null) return '\u2014';
+  if (p.rank_spread !== null && p.rank_spread > 0) {
+    return `${p.best_rank}e \u2192 ${p.worst_rank}e`;
+  }
+  return `${p.best_rank}e`;
+}
+
+// Reproduces the exact search that produced best_rank -- the grid
+// point's own coordinates, NEVER the business's own. A service-area
+// listing carries a city placeholder (every Paris SAB business sits at
+// the same coordinate), so linking there would show a point unrelated
+// to the measurement.
+function buildMapsLink(p: Prospect): string | null {
+  if (p.best_lat === null || p.best_lng === null || p.best_zoom === null) return null;
+  return `https://www.google.fr/maps/search/${encodeURIComponent(p.keyword)}/@${p.best_lat},${p.best_lng},${p.best_zoom}z`;
+}
+
+// Google's own term for a listing with no public shopfront (roughly 40%
+// of French trade listings) is "zone desservie", not the invented "Zone
+// d'intervention". Includes the campaign's own commune when known, since
+// that says both what the listing is AND why it appeared in this
+// specific campaign -- "Zone desservie" alone doesn't.
+//
+// campaign_commune comes from the row itself (prospect_view), not page
+// state -- works correctly on both the single-campaign view and the
+// general, all-campaigns view, no per-row lookup needed. Null only for
+// the six historical, region-scoped campaigns nothing creates any more.
+function formatCityOrServiceArea(city: string | null, campaignCommune: string | null): string {
+  if (city !== null) return city;
+  return campaignCommune ? `Zone desservie \u00b7 ${campaignCommune}` : 'Zone desservie';
+}
+
 const WEBSITE_KIND_LABELS: Record<Prospect['website_kind'], string> = {
   own: 'Site propre',
   none: 'Aucun',
@@ -276,7 +313,7 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
         <dl>
           <div className="detail-field">
             <dt>Position</dt>
-            <dd className="mono-num">{p.maps_position}</dd>
+            <dd className="mono-num">{formatRankRange(p)}</dd>
           </div>
           <div className="detail-field">
             <dt>Potentiel</dt>
@@ -290,7 +327,17 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
           </div>
           <div className="detail-field">
             <dt>Date de mesure</dt>
-            <dd className="mono-num">{formatDateFR(p.measured_at)}</dd>
+            <dd className="mono-num">
+              {formatDateFR(p.measured_at)}
+              {buildMapsLink(p) && (
+                <>
+                  {' \u00b7 '}
+                  <a href={buildMapsLink(p)!} target="_blank" rel="noopener noreferrer">
+                    Voir sur Maps
+                  </a>
+                </>
+              )}
+            </dd>
           </div>
         </dl>
       </div>
@@ -338,7 +385,7 @@ function ProspectCard({
             </span>
             <div>
               <div className="biz">{p.business_name}</div>
-              <div className="loc">{p.city ?? 'Zone d\u2019intervention'}</div>
+              <div className="loc">{formatCityOrServiceArea(p.city, p.campaign_commune)}</div>
             </div>
           </button>
           {/* Always populated on a delivered lead -- same invariant as
@@ -348,7 +395,7 @@ function ProspectCard({
 
         <div className="prospect-card-row">
           <span className="prospect-card-position">
-            Position <span className="mono-num">{p.maps_position}</span>
+            Position <span className="mono-num">{formatRankRange(p)}</span>
           </span>
           {p.rating !== null ? (
             <span>
@@ -628,6 +675,28 @@ function FiltresSheet({
               tabIndex={open ? 0 : -1}
             />
           </div>
+
+          <div className="filter-group">
+            <label htmlFor="fs-measured-from">Mesuré du</label>
+            <input
+              id="fs-measured-from"
+              type="date"
+              value={filters.measuredFrom}
+              onChange={(e) => setFilter('measuredFrom', e.target.value)}
+              tabIndex={open ? 0 : -1}
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="fs-measured-to">au</label>
+            <input
+              id="fs-measured-to"
+              type="date"
+              value={filters.measuredTo}
+              onChange={(e) => setFilter('measuredTo', e.target.value)}
+              tabIndex={open ? 0 : -1}
+            />
+          </div>
         </div>
 
         <div className="filtres-sheet-actions">
@@ -876,6 +945,21 @@ function ProspectsPageInner() {
   const rangeStart = totalCount === 0 ? 0 : (page - 1) * DEFAULT_PAGE_SIZE + 1;
   const rangeEnd = Math.min(page * DEFAULT_PAGE_SIZE, totalCount);
 
+  // Date range on measured_at, applied client-side to the currently
+  // fetched page only -- per spec, no query change. "To" bound extended
+  // to end-of-day rather than compared as a bare date string, or a
+  // same-day row with any time component past midnight would be
+  // incorrectly excluded.
+  const visibleRows = rows.filter((p) => {
+    if (filters.measuredFrom && new Date(p.measured_at) < new Date(filters.measuredFrom)) {
+      return false;
+    }
+    if (filters.measuredTo && new Date(p.measured_at) > new Date(`${filters.measuredTo}T23:59:59.999`)) {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <Tooltip.Provider delayDuration={200}>
     <div>
@@ -998,6 +1082,26 @@ function ProspectsPageInner() {
             />
           </div>
 
+          <div className="filter-group">
+            <label htmlFor="f-measured-from">Mesuré du</label>
+            <input
+              id="f-measured-from"
+              type="date"
+              value={filters.measuredFrom}
+              onChange={(e) => setFilter('measuredFrom', e.target.value)}
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="f-measured-to">au</label>
+            <input
+              id="f-measured-to"
+              type="date"
+              value={filters.measuredTo}
+              onChange={(e) => setFilter('measuredTo', e.target.value)}
+            />
+          </div>
+
           <button type="button" className="reset-btn" onClick={resetFilters}>
             Réinitialiser les filtres
           </button>
@@ -1024,10 +1128,9 @@ function ProspectsPageInner() {
         cities={cities}
       />
 
-      {!loading && rows.length === 0 ? (
+      {!loading && visibleRows.length === 0 ? (
         hasAnyProspectsEver === false ? (
           <div className="empty-state">
-            <h2>Aucun prospect pour l&rsquo;instant.</h2>
             <p>
               Créez une campagne : choisissez un métier et une ville, et vos premiers prospects
               arrivent en quelques minutes.
@@ -1055,8 +1158,8 @@ function ProspectsPageInner() {
                   <th>Mot-clé</th>
                   <th>
                     <span className="th-cluster">
-                      <button type="button" onClick={() => toggleSort('maps_position')}>
-                        Position {sortIndicator('maps_position')}
+                      <button type="button" onClick={() => toggleSort('best_rank')}>
+                        Position {sortIndicator('best_rank')}
                       </button>
                       <InfoTooltip text={COLUMN_HELP.position} />
                     </span>
@@ -1108,7 +1211,7 @@ function ProspectsPageInner() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((p) => {
+                {visibleRows.map((p) => {
                   const ficheState = getFicheGoogleState(p);
                   const emailState = getEmailCellState(p);
                   const phoneMismatch = hasPhoneMismatch(p);
@@ -1134,10 +1237,10 @@ function ProspectsPageInner() {
                           </span>
                           <span className="biz">{p.business_name}</span>
                         </button>
-                        <div className="loc">{p.city ?? 'Zone d\u2019intervention'}</div>
+                        <div className="loc">{formatCityOrServiceArea(p.city, p.campaign_commune)}</div>
                       </td>
                       <td>{p.keyword}</td>
-                      <td className="mono-num">{p.maps_position}</td>
+                      <td className="mono-num">{formatRankRange(p)}</td>
                       {/* Always populated on a delivered lead — mbi_fetched_at is
                           never null here (see the comment on it in mock-data.ts).
                           No pending branch: that state cannot occur on this table.
@@ -1223,7 +1326,17 @@ function ProspectsPageInner() {
                           </span>
                         )}
                       </td>
-                      <td className="mono-num">{formatDateFR(p.measured_at)}</td>
+                      <td className="mono-num">
+                        {formatDateFR(p.measured_at)}
+                        {buildMapsLink(p) && (
+                          <>
+                            {' \u00b7 '}
+                            <a href={buildMapsLink(p)!} target="_blank" rel="noopener noreferrer">
+                              Maps
+                            </a>
+                          </>
+                        )}
+                      </td>
                       <td className="mono-num">{formatDateFR(p.delivered_at)}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <select
@@ -1272,7 +1385,7 @@ function ProspectsPageInner() {
 
           {isMobile === true && (
             <div className="prospect-card-list">
-              {rows.map((p) => (
+              {visibleRows.map((p) => (
                 <ProspectCard
                   key={p.id}
                   p={p}

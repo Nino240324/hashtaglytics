@@ -15,6 +15,7 @@ import {
   DEFAULT_PROSPECT_SORT,
   fetchAgencyPlanUsage,
   fetchCampaign,
+  fetchHasAnyProspects,
   fetchProspects,
   fetchProspectStatusCounts,
   getAvailableCities,
@@ -774,6 +775,11 @@ function ProspectsPageInner() {
   useEffect(() => {
     getAvailableKeywords().then(setKeywords);
     getAvailableCities().then(setCities);
+    // Fixes the bug where this was declared but never set -- run once,
+    // unfiltered, deliberately ignoring the current filters/tab so a
+    // search matching nothing doesn't look identical to "this agency
+    // has never had any prospects at all."
+    fetchHasAnyProspects().then(setHasAnyProspectsEver);
   }, []);
 
   // Debounce the search box only — the select filters change on discrete
