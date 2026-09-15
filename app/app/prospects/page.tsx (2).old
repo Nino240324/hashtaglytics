@@ -118,14 +118,6 @@ function buildMapsLink(p: Prospect): string | null {
   return `https://www.google.fr/maps/search/${encodeURIComponent(p.keyword)}/@${p.best_lat},${p.best_lng},${p.best_zoom}z`;
 }
 
-// The business's OWN Google listing -- photos, reviews, hours, claimed
-// status. What an agency opens before dialling. Distinct from
-// buildMapsLink above, which reproduces the grid-point search instead.
-function buildFicheGoogleLink(p: Prospect): string | null {
-  if (p.place_id === null) return null;
-  return `https://www.google.com/maps/place/?q=place_id:${p.place_id}`;
-}
-
 // Google's own term for a listing with no public shopfront (roughly 40%
 // of French trade listings) is "zone desservie", not the invented "Zone
 // d'intervention". Includes the campaign's own commune when known, since
@@ -203,40 +195,6 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
                     <span className="badge badge-neutral">Aucune adresse</span>
                   )}
                 </>
-              )}
-            </dd>
-          </div>
-          <div className="detail-field">
-            <dt>Fiche Google</dt>
-            <dd>
-              {buildFicheGoogleLink(p) ? (
-                <a
-                  href={buildFicheGoogleLink(p)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ textDecoration: 'underline' }}
-                >
-                  Voir la fiche
-                </a>
-              ) : (
-                '\u2014'
-              )}
-            </dd>
-          </div>
-          <div className="detail-field">
-            <dt>Voir sur Maps</dt>
-            <dd>
-              {buildMapsLink(p) ? (
-                <a
-                  href={buildMapsLink(p)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ textDecoration: 'underline' }}
-                >
-                  Reproduire la recherche
-                </a>
-              ) : (
-                '\u2014'
               )}
             </dd>
           </div>
@@ -369,7 +327,17 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
           </div>
           <div className="detail-field">
             <dt>Date de mesure</dt>
-            <dd className="mono-num">{formatDateFR(p.measured_at)}</dd>
+            <dd className="mono-num">
+              {formatDateFR(p.measured_at)}
+              {buildMapsLink(p) && (
+                <>
+                  {' \u00b7 '}
+                  <a href={buildMapsLink(p)!} target="_blank" rel="noopener noreferrer">
+                    Voir sur Maps
+                  </a>
+                </>
+              )}
+            </dd>
           </div>
         </dl>
       </div>
@@ -747,7 +715,7 @@ function FiltresSheet({
 
 const COLUMN_HELP = {
   position:
-    'Meilleur et pire classement mesurés dans cette campagne. L\u2019écart montre comment la visibilité change d\u2019une rue à l\u2019autre.',
+    'Meilleur classement observé sur ce mot-clé, tous points de mesure confondus. Les trois premières places forment le pack local.',
   potentiel:
     'Part des points récupérables sur cette fiche. Plus le pourcentage est élevé, plus il y a de travail à vendre. Un prospect à 85 % a beaucoup à corriger ; un prospect à 20 % est déjà bien optimisé.',
   ficheGoogle:
@@ -1358,7 +1326,17 @@ function ProspectsPageInner() {
                           </span>
                         )}
                       </td>
-                      <td className="mono-num">{formatDateFR(p.measured_at)}</td>
+                      <td className="mono-num">
+                        {formatDateFR(p.measured_at)}
+                        {buildMapsLink(p) && (
+                          <>
+                            {' \u00b7 '}
+                            <a href={buildMapsLink(p)!} target="_blank" rel="noopener noreferrer">
+                              Maps
+                            </a>
+                          </>
+                        )}
+                      </td>
                       <td className="mono-num">{formatDateFR(p.delivered_at)}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <select
