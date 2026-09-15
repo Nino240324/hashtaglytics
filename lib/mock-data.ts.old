@@ -7,12 +7,17 @@
 //
 // [ESTABLISHED against the live schema]
 //   business_name, city, category, website_kind        -> businesses
-//   keyword, maps_position, review_count, rating,
+//   keyword, review_count, rating,
 //   photo_count, gbp_completeness, is_claimed, seo_score,
 //   website_phone_raw, nap_phone_match,
 //   mbi_fetched_at, email_checked_at, html_checked_at    -> business_snapshots
 //   email, email_status, outcome, delivered_at           -> leads
 //   phone                                                -> businesses.phone (E.164)
+//   best_rank, worst_rank, rank_spread, points_seen,
+//   best_lat, best_lng, best_zoom                        -> scoped to this
+//     lead's own campaign, NOT business_snapshots -- replaces the removed
+//     maps_position, which was shared across every agency and campaign
+//     and survived the deletion of the campaign that produced it.
 //   measured_at                                          -> business_snapshots.created_at
 //   nap_phone_match CHECK IN ('match','mismatch','no_website','no_gbp')
 //     -- confirmed in schema.sql, not the 3 values I might have guessed.
@@ -58,7 +63,31 @@ export type Prospect = {
   city: string | null; // null = service-area business, no address
   category: string | null;
   keyword: string;
-  maps_position: number;
+  // REPLACES maps_position, which was the best rank ever seen across
+  // every campaign and agency -- and survived the deletion of the
+  // campaign that produced it. These are scoped to this lead's own
+  // campaign.
+  best_rank: number | null;
+  worst_rank: number | null;
+  rank_spread: number | null;
+  points_seen: number | null; // not displayed -- see the brief
+
+  // The GRID POINT where the business ranked best, for the Maps link.
+  // Never the business's own coordinates: a service-area listing carries
+  // a city placeholder.
+  best_lat: number | null;
+  best_lng: number | null;
+  best_zoom: number | null;
+  // The campaign's own commune -- a campaign has exactly one, so this
+  // costs nothing on the view (already joins campaign_grids). Null only
+  // for the six historical, region-scoped campaigns nothing creates any
+  // more, but whose leads still exist.
+  campaign_commune: string | null;
+  // For the Fiche Google link -- the business's OWN listing (photos,
+  // reviews, hours, claimed status), distinct from best_lat/lng/zoom
+  // below, which is the grid point where it ranked best, not the
+  // business itself.
+  place_id: string | null;
   review_count: number | null;
   rating: number | null; // NULL on older scans -- no stars then
   photo_count: number | null;
@@ -159,7 +188,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Plombier chauffagiste",
     "keyword": "plombier",
-    "maps_position": 14,
+    "best_rank": 14,
+    "worst_rank": 14,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 43.5,
+    "best_lng": -0.5,
+    "best_zoom": 15,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNABCDEFGHIJKLMNOPQR",
     "review_count": 3,
     "rating": 3.8,
     "photo_count": 0,
@@ -189,7 +226,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Plombier",
     "keyword": "plombier",
-    "maps_position": 9,
+    "best_rank": 9,
+    "worst_rank": 36,
+    "rank_spread": 27,
+    "points_seen": 3,
+    "best_lat": 43.673,
+    "best_lng": -0.269,
+    "best_zoom": 16,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJQDEFGHIJKLMNOPQRSTU",
     "review_count": 11,
     "rating": 4.1,
     "photo_count": 2,
@@ -219,7 +264,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Entreprise de plomberie",
     "keyword": "plombier",
-    "maps_position": 21,
+    "best_rank": 21,
+    "worst_rank": 55,
+    "rank_spread": 34,
+    "points_seen": 4,
+    "best_lat": 43.846,
+    "best_lng": -0.038,
+    "best_zoom": 17,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNGHIJKLMNOPQRSTUVWX",
     "review_count": 6,
     "rating": 3.5,
     "photo_count": 1,
@@ -249,7 +302,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Plombier",
     "keyword": "plombier",
-    "maps_position": 6,
+    "best_rank": 6,
+    "worst_rank": 6,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 44.019,
+    "best_lng": 0.193,
+    "best_zoom": 15,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJQJKLMNOPQRSTUVWXYZA",
     "review_count": 34,
     "rating": 4.6,
     "photo_count": 9,
@@ -279,7 +340,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Plombier",
     "keyword": "plombier",
-    "maps_position": 17,
+    "best_rank": 17,
+    "worst_rank": 65,
+    "rank_spread": 48,
+    "points_seen": 6,
+    "best_lat": 44.192,
+    "best_lng": 0.424,
+    "best_zoom": 16,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJNMNOPQRSTUVWXYZABCD",
     "review_count": 4,
     "rating": 3.6,
     "photo_count": 0,
@@ -309,7 +378,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Plombier chauffagiste",
     "keyword": "plombier",
-    "maps_position": 12,
+    "best_rank": 12,
+    "worst_rank": 67,
+    "rank_spread": 55,
+    "points_seen": 7,
+    "best_lat": 44.365,
+    "best_lng": 0.655,
+    "best_zoom": 17,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQPQRSTUVWXYZABCDEFG",
     "review_count": 19,
     "rating": 4.0,
     "photo_count": 4,
@@ -339,7 +416,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lille",
     "category": "Plombier",
     "keyword": "plombier",
-    "maps_position": 24,
+    "best_rank": 24,
+    "worst_rank": 24,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 44.538,
+    "best_lng": 0.886,
+    "best_zoom": 15,
+    "campaign_commune": "Lille",
+    "place_id": "ChIJNSTUVWXYZABCDEFGHIJ",
     "review_count": 2,
     "rating": null,
     "photo_count": null,
@@ -369,7 +454,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lille",
     "category": "Plombier",
     "keyword": "plombier",
-    "maps_position": 19,
+    "best_rank": 19,
+    "worst_rank": 47,
+    "rank_spread": 28,
+    "points_seen": 2,
+    "best_lat": 44.711,
+    "best_lng": 1.117,
+    "best_zoom": 16,
+    "campaign_commune": "Lille",
+    "place_id": "ChIJQVWXYZABCDEFGHIJKLM",
     "review_count": 7,
     "rating": 3.9,
     "photo_count": 1,
@@ -399,7 +492,15 @@ export const mockProspects: Prospect[] = [
     "city": null,
     "category": "Plombier",
     "keyword": "plombier",
-    "maps_position": 27,
+    "best_rank": 27,
+    "worst_rank": 62,
+    "rank_spread": 35,
+    "points_seen": 3,
+    "best_lat": 44.884,
+    "best_lng": 1.348,
+    "best_zoom": 17,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJNYZABCDEFGHIJKLMNOP",
     "review_count": 15,
     "rating": 4.2,
     "photo_count": 3,
@@ -429,7 +530,15 @@ export const mockProspects: Prospect[] = [
     "city": null,
     "category": "Plombier chauffagiste",
     "keyword": "plombier",
-    "maps_position": 31,
+    "best_rank": 31,
+    "worst_rank": 31,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 45.057,
+    "best_lng": 1.579,
+    "best_zoom": 15,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQBCDEFGHIJKLMNOPQRS",
     "review_count": 9,
     "rating": 4.0,
     "photo_count": 2,
@@ -459,7 +568,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Menuisier",
     "keyword": "menuisier",
-    "maps_position": 8,
+    "best_rank": 8,
+    "worst_rank": 57,
+    "rank_spread": 49,
+    "points_seen": 5,
+    "best_lat": 45.23,
+    "best_lng": 1.81,
+    "best_zoom": 16,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNEFGHIJKLMNOPQRSTUV",
     "review_count": 22,
     "rating": 4.5,
     "photo_count": 11,
@@ -489,7 +606,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Menuisier ébéniste",
     "keyword": "menuisier",
-    "maps_position": 16,
+    "best_rank": 16,
+    "worst_rank": 72,
+    "rank_spread": 56,
+    "points_seen": 6,
+    "best_lat": 45.403,
+    "best_lng": 2.041,
+    "best_zoom": 17,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJQHIJKLMNOPQRSTUVWXY",
     "review_count": 5,
     "rating": 4.1,
     "photo_count": 0,
@@ -519,7 +644,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Menuiserie",
     "keyword": "menuisier",
-    "maps_position": 13,
+    "best_rank": 13,
+    "worst_rank": 13,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 45.576,
+    "best_lng": 2.272,
+    "best_zoom": 15,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNKLMNOPQRSTUVWXYZAB",
     "review_count": 8,
     "rating": 3.9,
     "photo_count": 2,
@@ -549,7 +682,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Menuisier",
     "keyword": "menuisier",
-    "maps_position": 22,
+    "best_rank": 22,
+    "worst_rank": 51,
+    "rank_spread": 29,
+    "points_seen": 8,
+    "best_lat": 45.749,
+    "best_lng": 2.503,
+    "best_zoom": 16,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQNOPQRSTUVWXYZABCDE",
     "review_count": 3,
     "rating": 3.7,
     "photo_count": 1,
@@ -579,7 +720,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Menuisier d'agencement",
     "keyword": "menuisier",
-    "maps_position": 10,
+    "best_rank": 10,
+    "worst_rank": 46,
+    "rank_spread": 36,
+    "points_seen": 2,
+    "best_lat": 45.922,
+    "best_lng": 2.734,
+    "best_zoom": 17,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJNQRSTUVWXYZABCDEFGH",
     "review_count": 27,
     "rating": 4.4,
     "photo_count": 7,
@@ -609,7 +758,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Menuisier",
     "keyword": "menuisier",
-    "maps_position": 18,
+    "best_rank": 18,
+    "worst_rank": 18,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 46.095,
+    "best_lng": 2.965,
+    "best_zoom": 15,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQTUVWXYZABCDEFGHIJK",
     "review_count": 6,
     "rating": 3.8,
     "photo_count": 0,
@@ -639,7 +796,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lille",
     "category": "Menuiserie",
     "keyword": "menuisier",
-    "maps_position": 15,
+    "best_rank": 15,
+    "worst_rank": 65,
+    "rank_spread": 50,
+    "points_seen": 4,
+    "best_lat": 46.268,
+    "best_lng": 3.196,
+    "best_zoom": 16,
+    "campaign_commune": "Lille",
+    "place_id": "ChIJNWXYZABCDEFGHIJKLMN",
     "review_count": 9,
     "rating": 4.0,
     "photo_count": 3,
@@ -669,7 +834,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lille",
     "category": "Menuisier ébéniste",
     "keyword": "menuisier",
-    "maps_position": 20,
+    "best_rank": 20,
+    "worst_rank": 77,
+    "rank_spread": 57,
+    "points_seen": 5,
+    "best_lat": 46.441,
+    "best_lng": 3.427,
+    "best_zoom": 17,
+    "campaign_commune": "Lille",
+    "place_id": "ChIJQZABCDEFGHIJKLMNOPQ",
     "review_count": 4,
     "rating": null,
     "photo_count": null,
@@ -699,7 +872,15 @@ export const mockProspects: Prospect[] = [
     "city": null,
     "category": "Menuisier",
     "keyword": "menuisier",
-    "maps_position": 29,
+    "best_rank": 29,
+    "worst_rank": 29,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 46.614,
+    "best_lng": 3.658,
+    "best_zoom": 15,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJNCDEFGHIJKLMNOPQRST",
     "review_count": 10,
     "rating": 4.0,
     "photo_count": 2,
@@ -729,7 +910,15 @@ export const mockProspects: Prospect[] = [
     "city": null,
     "category": "Ébéniste",
     "keyword": "menuisier",
-    "maps_position": 33,
+    "best_rank": 33,
+    "worst_rank": 63,
+    "rank_spread": 30,
+    "points_seen": 7,
+    "best_lat": 46.787,
+    "best_lng": 3.889,
+    "best_zoom": 16,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQFGHIJKLMNOPQRSTUVW",
     "review_count": 1,
     "rating": 3.5,
     "photo_count": 0,
@@ -759,7 +948,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Cabinet d'avocats",
     "keyword": "avocat",
-    "maps_position": 5,
+    "best_rank": 5,
+    "worst_rank": 42,
+    "rank_spread": 37,
+    "points_seen": 8,
+    "best_lat": 46.96,
+    "best_lng": 4.12,
+    "best_zoom": 17,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNIJKLMNOPQRSTUVWXYZ",
     "review_count": 18,
     "rating": 4.7,
     "photo_count": 6,
@@ -789,7 +986,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Cabinet d'avocats",
     "keyword": "avocat",
-    "maps_position": 7,
+    "best_rank": 7,
+    "worst_rank": 7,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 47.133,
+    "best_lng": 4.351,
+    "best_zoom": 15,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJQLMNOPQRSTUVWXYZABC",
     "review_count": 25,
     "rating": 4.5,
     "photo_count": 4,
@@ -819,7 +1024,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Avocat",
     "keyword": "avocat",
-    "maps_position": 15,
+    "best_rank": 15,
+    "worst_rank": 66,
+    "rank_spread": 51,
+    "points_seen": 3,
+    "best_lat": 47.306,
+    "best_lng": 4.582,
+    "best_zoom": 16,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNOPQRSTUVWXYZABCDEF",
     "review_count": 6,
     "rating": 4.0,
     "photo_count": 1,
@@ -849,7 +1062,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Avocat",
     "keyword": "avocat",
-    "maps_position": 23,
+    "best_rank": 23,
+    "worst_rank": 81,
+    "rank_spread": 58,
+    "points_seen": 4,
+    "best_lat": 47.479,
+    "best_lng": 4.813,
+    "best_zoom": 17,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJQRSTUVWXYZABCDEFGHI",
     "review_count": 2,
     "rating": 3.6,
     "photo_count": 0,
@@ -879,7 +1100,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Cabinet d'avocats",
     "keyword": "avocat",
-    "maps_position": 4,
+    "best_rank": 4,
+    "worst_rank": 4,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 47.652,
+    "best_lng": 5.044,
+    "best_zoom": 15,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJNUVWXYZABCDEFGHIJKL",
     "review_count": 41,
     "rating": 4.8,
     "photo_count": 9,
@@ -909,7 +1138,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Avocat",
     "keyword": "avocat",
-    "maps_position": 19,
+    "best_rank": 19,
+    "worst_rank": 50,
+    "rank_spread": 31,
+    "points_seen": 6,
+    "best_lat": 47.825,
+    "best_lng": 5.275,
+    "best_zoom": 16,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQXYZABCDEFGHIJKLMNO",
     "review_count": 5,
     "rating": 3.9,
     "photo_count": 1,
@@ -939,7 +1176,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Avocat",
     "keyword": "avocat",
-    "maps_position": 26,
+    "best_rank": 26,
+    "worst_rank": 64,
+    "rank_spread": 38,
+    "points_seen": 7,
+    "best_lat": 47.998,
+    "best_lng": 5.506,
+    "best_zoom": 17,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJNABCDEFGHIJKLMNOPQR",
     "review_count": 3,
     "rating": 3.7,
     "photo_count": 0,
@@ -969,7 +1214,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lille",
     "category": "Cabinet d'avocats",
     "keyword": "avocat",
-    "maps_position": 6,
+    "best_rank": 6,
+    "worst_rank": 6,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 48.171,
+    "best_lng": 5.737,
+    "best_zoom": 15,
+    "campaign_commune": "Lille",
+    "place_id": "ChIJQDEFGHIJKLMNOPQRSTU",
     "review_count": 21,
     "rating": 4.6,
     "photo_count": 5,
@@ -999,7 +1252,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lille",
     "category": "Avocat",
     "keyword": "avocat",
-    "maps_position": 17,
+    "best_rank": 17,
+    "worst_rank": 69,
+    "rank_spread": 52,
+    "points_seen": 2,
+    "best_lat": 48.344,
+    "best_lng": 5.968,
+    "best_zoom": 16,
+    "campaign_commune": "Lille",
+    "place_id": "ChIJNGHIJKLMNOPQRSTUVWX",
     "review_count": 4,
     "rating": 3.8,
     "photo_count": 1,
@@ -1029,7 +1290,15 @@ export const mockProspects: Prospect[] = [
     "city": "Bordeaux",
     "category": "Avocat",
     "keyword": "avocat",
-    "maps_position": 25,
+    "best_rank": 25,
+    "worst_rank": 84,
+    "rank_spread": 59,
+    "points_seen": 3,
+    "best_lat": 48.517,
+    "best_lng": 6.199,
+    "best_zoom": 17,
+    "campaign_commune": "Bordeaux",
+    "place_id": "ChIJQJKLMNOPQRSTUVWXYZA",
     "review_count": 1,
     "rating": 3.4,
     "photo_count": 0,
@@ -1059,7 +1328,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Cabinet d'architecture",
     "keyword": "architecte",
-    "maps_position": 8,
+    "best_rank": 8,
+    "worst_rank": 8,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 48.69,
+    "best_lng": 6.43,
+    "best_zoom": 15,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNMNOPQRSTUVWXYZABCD",
     "review_count": 16,
     "rating": 4.4,
     "photo_count": 12,
@@ -1089,7 +1366,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Architecte",
     "keyword": "architecte",
-    "maps_position": 18,
+    "best_rank": 18,
+    "worst_rank": 50,
+    "rank_spread": 32,
+    "points_seen": 5,
+    "best_lat": 48.863,
+    "best_lng": -0.339,
+    "best_zoom": 16,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJQPQRSTUVWXYZABCDEFG",
     "review_count": 5,
     "rating": 4.0,
     "photo_count": 3,
@@ -1119,7 +1404,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lyon",
     "category": "Architecte",
     "keyword": "architecte",
-    "maps_position": 27,
+    "best_rank": 27,
+    "worst_rank": 66,
+    "rank_spread": 39,
+    "points_seen": 6,
+    "best_lat": 49.036,
+    "best_lng": -0.108,
+    "best_zoom": 17,
+    "campaign_commune": "Lyon",
+    "place_id": "ChIJNSTUVWXYZABCDEFGHIJ",
     "review_count": 2,
     "rating": 3.6,
     "photo_count": 0,
@@ -1149,7 +1442,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Cabinet d'architecture",
     "keyword": "architecte",
-    "maps_position": 9,
+    "best_rank": 9,
+    "worst_rank": 9,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 49.209,
+    "best_lng": 0.123,
+    "best_zoom": 15,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQVWXYZABCDEFGHIJKLM",
     "review_count": 20,
     "rating": 4.5,
     "photo_count": 10,
@@ -1179,7 +1480,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Architecte",
     "keyword": "architecte",
-    "maps_position": 21,
+    "best_rank": 21,
+    "worst_rank": 74,
+    "rank_spread": 53,
+    "points_seen": 8,
+    "best_lat": 49.382,
+    "best_lng": 0.354,
+    "best_zoom": 16,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJNYZABCDEFGHIJKLMNOP",
     "review_count": 4,
     "rating": 3.8,
     "photo_count": 1,
@@ -1209,7 +1518,15 @@ export const mockProspects: Prospect[] = [
     "city": "Paris",
     "category": "Architecte",
     "keyword": "architecte",
-    "maps_position": 14,
+    "best_rank": 14,
+    "worst_rank": 74,
+    "rank_spread": 60,
+    "points_seen": 2,
+    "best_lat": 49.555,
+    "best_lng": 0.585,
+    "best_zoom": 17,
+    "campaign_commune": "Paris",
+    "place_id": "ChIJQBCDEFGHIJKLMNOPQRS",
     "review_count": 7,
     "rating": 4.1,
     "photo_count": 2,
@@ -1239,7 +1556,15 @@ export const mockProspects: Prospect[] = [
     "city": "Lille",
     "category": "Cabinet d'architecture",
     "keyword": "architecte",
-    "maps_position": 11,
+    "best_rank": 11,
+    "worst_rank": 11,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 49.728,
+    "best_lng": 0.816,
+    "best_zoom": 15,
+    "campaign_commune": "Lille",
+    "place_id": "ChIJNEFGHIJKLMNOPQRSTUV",
     "review_count": 13,
     "rating": 4.3,
     "photo_count": 6,
@@ -1269,7 +1594,15 @@ export const mockProspects: Prospect[] = [
     "city": "Bordeaux",
     "category": "Architecte",
     "keyword": "architecte",
-    "maps_position": 16,
+    "best_rank": 16,
+    "worst_rank": 49,
+    "rank_spread": 33,
+    "points_seen": 4,
+    "best_lat": 49.901,
+    "best_lng": 1.047,
+    "best_zoom": 16,
+    "campaign_commune": "Bordeaux",
+    "place_id": "ChIJQHIJKLMNOPQRSTUVWXY",
     "review_count": 9,
     "rating": 4.2,
     "photo_count": 3,
@@ -1299,7 +1632,15 @@ export const mockProspects: Prospect[] = [
     "city": "Bordeaux",
     "category": "Architecte",
     "keyword": "architecte",
-    "maps_position": 24,
+    "best_rank": 24,
+    "worst_rank": 64,
+    "rank_spread": 40,
+    "points_seen": 5,
+    "best_lat": 50.074,
+    "best_lng": 1.278,
+    "best_zoom": 17,
+    "campaign_commune": "Bordeaux",
+    "place_id": "ChIJNKLMNOPQRSTUVWXYZAB",
     "review_count": 3,
     "rating": 3.7,
     "photo_count": 0,
@@ -1329,7 +1670,15 @@ export const mockProspects: Prospect[] = [
     "city": "Bordeaux",
     "category": "Architecte",
     "keyword": "architecte",
-    "maps_position": 20,
+    "best_rank": 20,
+    "worst_rank": 20,
+    "rank_spread": 0,
+    "points_seen": 1,
+    "best_lat": 50.247,
+    "best_lng": 1.509,
+    "best_zoom": 15,
+    "campaign_commune": "Bordeaux",
+    "place_id": "ChIJQNOPQRSTUVWXYZABCDE",
     "review_count": 6,
     "rating": 4.0,
     "photo_count": 2,
@@ -3207,6 +3556,13 @@ export type ProspectFilters = {
   website: 'tous' | 'own' | 'none' | 'not_controlled';
   email: 'tous' | 'verifie' | 'present_non_verifie' | 'aucun';
   search: string;
+  // Date range on measured_at (scan date), NOT delivered_at -- a lead
+  // delivered today may have been scanned weeks ago (snapshots are
+  // reused within their TTL), so "what's fresh" means measured_at.
+  // Empty string = no bound on that side. Client-side, per spec -- no
+  // query change, filters the fetched page rather than the database.
+  measuredFrom: string;
+  measuredTo: string;
 };
 
 export const DEFAULT_PROSPECT_FILTERS: ProspectFilters = {
@@ -3216,9 +3572,11 @@ export const DEFAULT_PROSPECT_FILTERS: ProspectFilters = {
   website: 'tous',
   email: 'tous',
   search: '',
+  measuredFrom: '',
+  measuredTo: '',
 };
 
-export type ProspectSortKey = 'maps_position' | 'potentiel' | 'rating' | 'delivered_at' | 'measured_at';
+export type ProspectSortKey = 'best_rank' | 'potentiel' | 'rating' | 'delivered_at' | 'measured_at';
 export type ProspectSortDir = 'asc' | 'desc';
 export type ProspectSort = { key: ProspectSortKey; dir: ProspectSortDir };
 
@@ -3281,8 +3639,8 @@ function matchesFilters(p: Prospect, f: ProspectFilters): boolean {
 
 function getSortValue(p: Prospect, key: ProspectSortKey): number | null {
   switch (key) {
-    case 'maps_position':
-      return p.maps_position;
+    case 'best_rank':
+      return p.best_rank;
     case 'potentiel':
       return p.seo_score === null ? null : 100 - p.seo_score;
     case 'rating':
@@ -3470,6 +3828,27 @@ export async function fetchProspectStatusCounts(
   return counts;
 }
 
+// Distinguishes "no data at all" from "no results for the current
+// filters" -- fixes the pre-existing bug where hasAnyProspectsEver in
+// prospects/page.tsx was declared but never set (null !== false, so
+// that branch could never trigger). Deliberately unfiltered and
+// ignores the tab -- if this respected the current filters, a search
+// matching nothing would look identical to "this agency has never had
+// any prospects at all," showing the wrong empty state to an existing
+// customer. Only needs to tell zero from non-zero, so a head-only count
+// is enough; run once on mount, not on every filter change.
+export async function fetchHasAnyProspects(): Promise<boolean> {
+  const supabase = createClient();
+  const { count, error } = await supabase
+    .from('prospect_view')
+    .select('id', { count: 'exact', head: true });
+  if (error) {
+    console.error('fetchHasAnyProspects query failed', error);
+    return false;
+  }
+  return (count ?? 0) > 0;
+}
+
 // The only write in this pass. Both columns, always -- a CHECK
 // constraint (leads_outcome_at_chk) requires outcome_at whenever
 // outcome is set, so writing outcome alone would fail.
@@ -3555,15 +3934,36 @@ export type CommuneSearchResult = {
 // Requires 2+ characters: one character matches thousands of rows and
 // helps nobody.
 export async function searchCommunes(query: string, limit = 8): Promise<CommuneSearchResult> {
-  const q = normaliseQuery(query);
+  const q = query.trim();
   if (q.length < 2) return { results: [], totalMatches: 0 };
-  const matches = mockCommunes.filter((c) => c.slug.includes(q));
-  const sorted = [...matches].sort((a, b) => (b.population ?? 0) - (a.population ?? 0));
-  return { results: sorted.slice(0, limit), totalMatches: matches.length };
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('search_communes', { p_query: q, p_limit: limit });
+  if (error) {
+    console.error('searchCommunes RPC failed', error);
+    return { results: [], totalMatches: 0 };
+  }
+  const rows = (data as any[]) ?? [];
+  return {
+    // total_matches is repeated on every row (how one query returns both
+    // the page and the true count against all 34,746 communes) -- stripped
+    // out here since it's not part of the Commune shape.
+    results: rows.map(({ total_matches, ...c }) => c as Commune),
+    totalMatches: rows[0]?.total_matches ?? 0,
+  };
 }
 
 export async function getCommuneByCodeInsee(code: string): Promise<Commune | null> {
-  return mockCommunes.find((c) => c.code_insee === code) ?? null;
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('communes')
+    .select('code_insee, nom, slug, dept_code, region_name, population')
+    .eq('code_insee', code)
+    .maybeSingle();
+  if (error) {
+    console.error('getCommuneByCodeInsee query failed', error);
+    return null;
+  }
+  return (data as Commune | null) ?? null;
 }
 
 // -- Campaigns ------------------------------------------------------------
@@ -3849,18 +4249,129 @@ export async function updateBrandInfo(
   return { ok: true, message: 'Enregistré localement. La sauvegarde réelle n\u2019est pas encore câblée.' };
 }
 
+// Placeholder used only when a campaign has neither a linked commune
+// NOR an active region row -- should be rare in practice, but a safe
+// final fallback rather than crashing.
+const NO_COMMUNE_FALLBACK: Commune = {
+  code_insee: '',
+  nom: 'France',
+  slug: '',
+  dept_code: '',
+  region_name: 'France',
+  population: null,
+};
+
+// Shared by fetchCampaignsOverview and fetchCampaign -- both run the same
+// nested select and need the same three flattening steps applied to each
+// row, so this is written once rather than duplicated.
+function mapCampaignRow(row: any, businessesFound: number): Campaign {
+  // Fallback chain per Opus: commune -> active region -> "France".
+  // "France" alone would discard something real -- a region-scoped
+  // campaign was genuinely scoped to e.g. Hauts-de-France, and an
+  // agency looking at their own history should see that, not a country.
+  const communeRow = row.campaign_communes?.[0]?.communes;
+  if (communeRow) {
+    return {
+      id: row.id,
+      keyword: row.campaign_keywords?.[0]?.keyword ?? '',
+      commune: communeRow,
+      status: row.status,
+      total_grids: row.total_grids,
+      completed_grids: row.completed_grids,
+      businesses_found: businessesFound,
+      created_at: row.created_at,
+      completed_at: row.completed_at,
+    };
+  }
+  // A deactivated region row should not be displayed -- filtered
+  // client-side rather than in the query itself, to avoid the risk of a
+  // nested Postgrest filter silently excluding the whole campaign row
+  // if written wrong, which would be a much worse bug than showing the
+  // wrong fallback name.
+  const activeRegion = (row.campaign_regions as { region_name: string; status: string }[] | undefined)?.find(
+    (r) => r.status === 'active',
+  );
+  const regionName = activeRegion?.region_name ?? 'France';
+  return {
+    id: row.id,
+    keyword: row.campaign_keywords?.[0]?.keyword ?? '',
+    commune: { ...NO_COMMUNE_FALLBACK, nom: regionName, region_name: regionName },
+    status: row.status,
+    total_grids: row.total_grids,
+    completed_grids: row.completed_grids,
+    businesses_found: businessesFound,
+    created_at: row.created_at,
+    completed_at: row.completed_at,
+  };
+}
+
+// businesses_found isn't a column on campaigns -- it's a sum across that
+// campaign's grid rows. One extra query for the whole list (keyed by
+// campaign_id), not one query per campaign.
+async function fetchBusinessesFoundByCampaign(
+  supabase: ReturnType<typeof createClient>,
+  campaignIds: string[],
+): Promise<Record<string, number>> {
+  if (campaignIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('campaign_grids')
+    .select('campaign_id, businesses_found')
+    .in('campaign_id', campaignIds);
+  if (error) {
+    console.error('fetchBusinessesFoundByCampaign query failed', error);
+    return {};
+  }
+  const sums: Record<string, number> = {};
+  for (const row of (data as { campaign_id: string; businesses_found: number }[]) ?? []) {
+    sums[row.campaign_id] = (sums[row.campaign_id] ?? 0) + (row.businesses_found ?? 0);
+  }
+  return sums;
+}
+
+const CAMPAIGN_SELECT = `
+  id, status, total_grids, completed_grids, created_at, completed_at,
+  campaign_keywords ( keyword ),
+  campaign_communes ( communes ( code_insee, nom, slug, dept_code, region_name, population ) ),
+  campaign_regions ( region_name, status )
+`;
+
 export async function fetchCampaignsOverview(): Promise<{
   campaigns: Campaign[];
   planUsage: AgencyPlanUsage;
 }> {
+  const supabase = createClient();
+  // No agency_id filter -- RLS scopes this to the current agency.
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select(CAMPAIGN_SELECT)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('fetchCampaignsOverview query failed', error);
+  }
+  const rows = (data as any[]) ?? [];
+  const sums = await fetchBusinessesFoundByCampaign(
+    supabase,
+    rows.map((r) => r.id),
+  );
   return {
-    campaigns: MOCK_FREE_TIER_EMPTY_AGENCY ? [] : campaignStore,
+    campaigns: rows.map((row) => mapCampaignRow(row, sums[row.id] ?? 0)),
     planUsage: await fetchAgencyPlanUsage(),
   };
 }
 
 export async function fetchCampaign(id: string): Promise<Campaign | null> {
-  return campaignStore.find((c) => c.id === id) ?? null;
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select(CAMPAIGN_SELECT)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    console.error('fetchCampaign query failed', error);
+  }
+  if (data === null || data === undefined) return null;
+  const sums = await fetchBusinessesFoundByCampaign(supabase, [id]);
+  return mapCampaignRow(data, sums[id] ?? 0);
 }
 
 // -- Campaign progress polling (brief 5.3, corrected by Opus) -----------
@@ -3940,45 +4451,81 @@ export function computeCampaignFunnel(
 }
 
 export async function fetchCampaignProgress(id: string): Promise<CampaignProgress | null> {
-  const c = campaignStore.find((c) => c.id === id);
-  if (c === undefined) return null;
+  const supabase = createClient();
 
-  // Advances state as a SIDE EFFECT of being polled -- this is the only
-  // way to fake movement without a real backend behind it. The real
-  // endpoint is a pure read; the actual advancement happens independently
-  // in the background via the real scanning pipeline, not because
-  // something polled it. Do not read this as a description of how the
-  // real endpoint should behave.
-  if (c.status === 'in_progress' && c.completed_grids < c.total_grids) {
-    // Density (businesses per grid point) is derived from the campaign's
-    // OWN numbers where it already has some progress, so the rate stays
-    // consistent with what's already shown on /app/campagnes; a fixed
-    // default covers a campaign starting from zero, where that ratio
-    // doesn't exist yet.
-    const density = c.completed_grids > 0 ? c.businesses_found / c.completed_grids : 3.4;
-    const increment = Math.max(1, Math.ceil(c.total_grids / POLLS_TO_COMPLETE));
-    c.completed_grids = Math.min(c.total_grids, c.completed_grids + increment);
-    c.businesses_found = Math.round(c.completed_grids * density);
+  // Bounded by this campaign's own total_grids (40-150 rows for a town
+  // campaign) -- never query business_grid_positions or anything
+  // unbounded here. This runs every 3 seconds; an unbounded query on a
+  // 3s poll is the mistake that would make the whole site struggle.
+  const scanQuery = supabase
+    .from('campaign_grids')
+    .select('processed_at, status, businesses_found')
+    .eq('campaign_id', id);
+
+  // Three separate counts, not one query with all three conditions
+  // chained -- chaining would only answer "how many are both enriched
+  // AND delivered". campaign_id assumed to exist directly on leads, per
+  // the spec's own example -- if this specific query fails, that's the
+  // one thing to check: leads may only carry campaign_grid_id, needing
+  // a join through campaign_grids instead. No way to confirm the live
+  // schema from here, so this is built as given and will fail loudly
+  // (logged below) rather than silently if that assumption is wrong.
+  const qualifiedQuery = supabase
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', id);
+  const enrichedQuery = supabase
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', id)
+    .not('mbi_fetched_at', 'is', null);
+  const deliveredQuery = supabase
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', id)
+    .not('delivered_at', 'is', null);
+
+  const [scanResult, qualifiedResult, enrichedResult, deliveredResult] = await Promise.all([
+    scanQuery,
+    qualifiedQuery,
+    enrichedQuery,
+    deliveredQuery,
+  ]);
+
+  if (scanResult.error) {
+    console.error('fetchCampaignProgress: campaign_grids query failed', scanResult.error);
+  }
+  if (qualifiedResult.error) {
+    console.error('fetchCampaignProgress: qualified count failed', qualifiedResult.error);
+  }
+  if (enrichedResult.error) {
+    console.error('fetchCampaignProgress: enriched count failed', enrichedResult.error);
+  }
+  if (deliveredResult.error) {
+    console.error('fetchCampaignProgress: delivered count failed', deliveredResult.error);
   }
 
-  const total = c.total_grids;
-  const scanned = c.completed_grids;
-  // Tapers toward 0 as scanning finishes -- an arbitrary but plausible
-  // concurrency figure, never exceeding what's actually left to scan.
-  const inFlight = scanned >= total ? 0 : Math.min(8, total - scanned);
-  const scanPct = total > 0 ? scanned / total : 0;
+  const gridRows = (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
+  if (gridRows.length === 0) return null;
 
-  const matching = prospectStore.filter((p) => p.keyword === c.keyword && p.city === c.commune.nom);
-  const funnel = computeCampaignFunnel(c.businesses_found, scanPct, matching.length);
+  const total = gridRows.length;
+  // processed_at, NEVER status -- a row can carry status='completed'
+  // with processed_at still null. complete_grid_point is the only thing
+  // that sets processed_at, so a timestamp means it genuinely happened;
+  // counting by status would overstate progress on rows that never
+  // actually scanned.
+  const scanned = gridRows.filter((r) => r.processed_at !== null).length;
+  const inFlight = gridRows.filter((r) => r.status === 'in_progress').length;
+  const businesses = gridRows.reduce((sum, r) => sum + (r.businesses_found ?? 0), 0);
 
   return {
     total,
     scanned,
     inFlight,
-    businesses: c.businesses_found,
-    leadsQualified: funnel.leadsQualified,
-    leadsEnriched: funnel.leadsEnriched,
-    leadsDelivered: funnel.leadsDelivered,
+    businesses,
+    leadsQualified: qualifiedResult.count ?? 0,
+    leadsEnriched: enrichedResult.count ?? 0,
+    leadsDelivered: deliveredResult.count ?? 0,
   };
 }
 
@@ -3999,20 +4546,37 @@ export async function fetchProspectsForCampaign(id: string): Promise<Prospect[]>
   return (data as Prospect[] | null) ?? [];
 }
 
-// STUB -- deliberately does not create anything. See the v1 file's
-// equivalent comment for the full real-implementation TODO list (advisory
-// lock, server-side re-check, keyword normalisation, grid sweep, n8n
-// webhook) -- unchanged in spirit, now gated by max_active_campaigns
-// (enforce_max_campaigns) rather than max_keywords/max_regions.
+// Agency is NEVER a parameter here -- resolved from auth.uid() inside
+// create_campaign itself. A client-supplied agency_id could create
+// campaigns in someone else's account, spending their quota and real
+// money on scans.
+//
+// One RPC, not four client-side writes (campaign, commune, keyword,
+// grid rows) -- a failure between any two of those leaves wreckage that
+// looks like a working campaign (a campaign slot burnt with no
+// commune, or one that sits at 0/0 forever). The database function does
+// all four in one transaction.
 export async function createCampaign(input: {
   keyword: string;
   codeInsee: string;
-}): Promise<{ ok: true; message: string }> {
-  // eslint-disable-next-line no-console
-  console.log('[stub] createCampaign called with', input, '-- no real effect.');
-  return {
-    ok: true,
-    message:
-      "Formulaire enregistre localement. La creation reelle de campagne (quota, grille, n8n) n'est pas encore cablee.",
-  };
+}): Promise<{ ok: true; campaignId: string; gridPoints: number } | { ok: false; message: string }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('create_campaign', {
+    p_keyword: input.keyword,
+    p_code_insee: input.codeInsee,
+  });
+  if (error) {
+    // The two quota/limit errors are written to be shown verbatim to the
+    // user (French, complete sentences) -- shown as-is rather than
+    // replaced with a generic failure message. Anything else (unknown
+    // commune, empty keyword) is developer-facing and shouldn't reach a
+    // user in practice, since the form prevents both.
+    return { ok: false, message: error.message };
+  }
+  const row = (data as { campaign_id: string; grid_points: number; keyword: string }[])?.[0];
+  if (row === undefined) {
+    console.error('createCampaign: RPC succeeded but returned no row', data);
+    return { ok: false, message: 'Une erreur est survenue. Réessayez.' };
+  }
+  return { ok: true, campaignId: row.campaign_id, gridPoints: row.grid_points };
 }

@@ -142,7 +142,7 @@ function formatCityOrServiceArea(city: string | null, campaignCommune: string | 
 }
 
 const WEBSITE_KIND_LABELS: Record<Prospect['website_kind'], string> = {
-  own: 'Site propre',
+  own: 'Site existant',
   none: 'Aucun',
   booking_platform: 'Page qu\u2019il ne contrôle pas',
   social: 'Page qu\u2019il ne contrôle pas',
@@ -214,7 +214,7 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
                   href={buildFicheGoogleLink(p)!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ textDecoration: 'underline' }}
+                  style={{ color: 'var(--navy)', textDecoration: 'underline' }}
                 >
                   Voir la fiche
                 </a>
@@ -231,7 +231,7 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
                   href={buildMapsLink(p)!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ textDecoration: 'underline' }}
+                  style={{ color: 'var(--navy)', textDecoration: 'underline' }}
                 >
                   Reproduire la recherche
                 </a>
@@ -292,7 +292,20 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
         <dl>
           <div className="detail-field">
             <dt>Type</dt>
-            <dd>{WEBSITE_KIND_LABELS[p.website_kind]}</dd>
+            <dd>
+              {p.website_kind === 'own' && p.website !== null ? (
+                <a
+                  href={p.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--navy)', textDecoration: 'underline' }}
+                >
+                  {WEBSITE_KIND_LABELS[p.website_kind]}
+                </a>
+              ) : (
+                WEBSITE_KIND_LABELS[p.website_kind]
+              )}
+            </dd>
           </div>
           {p.website_kind === 'own' && (
             <>
