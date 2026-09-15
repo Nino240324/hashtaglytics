@@ -8,34 +8,22 @@ interface Tier {
   name: string;
   monthly: string;
   annual: string;
-  prospects: number; // the new total -- database stores only this one number
-  bonus: number; // the offered portion of that total, for the "X + Y offerts" sentence below -- display-only, not a separate stored value
-  maxActiveCampaigns: number;
+  prospects: string;
+  keywords: number;
+  regions: number;
   recommended?: boolean;
 }
 
 const TIERS: Tier[] = [
-  { name: 'Trial',    monthly: '57\u00a0€',  annual: '570\u00a0€',       prospects: 110,  bonus: 10,  maxActiveCampaigns: 2 },
-  { name: 'Starter',  monthly: '86\u00a0€',  annual: '860\u00a0€',       prospects: 220,  bonus: 20,  maxActiveCampaigns: 3 },
-  { name: 'Growth',   monthly: '143\u00a0€', annual: '1\u00a0430\u00a0€', prospects: 440,  bonus: 40,  maxActiveCampaigns: 6, recommended: true },
-  { name: 'Business', monthly: '287\u00a0€', annual: '2\u00a0870\u00a0€', prospects: 935,  bonus: 85,  maxActiveCampaigns: 12 },
-  { name: 'Premium',  monthly: '503\u00a0€', annual: '5\u00a0030\u00a0€', prospects: 1980, bonus: 180, maxActiveCampaigns: 25 },
+  { name: 'Trial',   monthly: '57\u00a0€',  annual: '570\u00a0€',   prospects: '100',   keywords: 1, regions: 1 },
+  { name: 'Starter', monthly: '86\u00a0€',  annual: '860\u00a0€',   prospects: '200',   keywords: 1, regions: 1 },
+  { name: 'Growth',  monthly: '143\u00a0€', annual: '1\u00a0430\u00a0€', prospects: '400',   keywords: 2, regions: 2, recommended: true },
+  { name: 'Business',monthly: '287\u00a0€', annual: '2\u00a0870\u00a0€', prospects: '850',   keywords: 3, regions: 3 },
+  { name: 'Premium', monthly: '503\u00a0€', annual: '5\u00a0030\u00a0€', prospects: '1\u00a0800', keywords: 5, regions: 5 },
 ];
 
-// Matches the existing price formatting convention (e.g. "1\u00a0430\u00a0€")
-// rather than relying on toLocaleString, whose exact space character can
-// vary by locale data -- only Premium's totals (1980, 1800) need this.
-function formatCount(n: number): string {
-  return n >= 1000 ? `${Math.floor(n / 1000)}\u00a0${String(n % 1000).padStart(3, '0')}` : String(n);
-}
-
-// Explicitly "at a time" -- the constraint is CONCURRENCY (a finished
-// campaign can be archived and another started), not a lifetime cap.
-// "1 campagne" alone reads as "one ever", which is wrong.
-function pluralizeCampaigns(n: number): string {
-  return n === 1
-    ? `${n}\u00a0campagne active à la fois`
-    : `${n}\u00a0campagnes actives à la fois`;
+function pluralize(n: number, singular: string, plural: string): string {
+  return n === 1 ? `${n}\u00a0${singular}` : `${n}\u00a0${plural}`;
 }
 
 export default function TarifsPage() {
@@ -48,7 +36,7 @@ export default function TarifsPage() {
         <h1>Cinq formules. Vous ne payez que le volume dont vous avez besoin.</h1>
         <p className="lede">
           Chaque formule correspond à un volume de prospects par mois, et au
-          nombre de campagnes actives que vous pouvez mener en même temps.
+          nombre de métiers et de zones que vous pouvez travailler en parallèle.
           Vous changez de formule quand vous voulez.
         </p>
 
@@ -110,11 +98,8 @@ export default function TarifsPage() {
               </div>
 
               <ul>
-                <li>
-                  {formatCount(tier.prospects)} prospects qualifiés par mois ({formatCount(tier.prospects - tier.bonus)}{' '}
-                  + {tier.bonus} offerts)
-                </li>
-                <li>{pluralizeCampaigns(tier.maxActiveCampaigns)}</li>
+                <li>{tier.prospects} prospects qualifiés par mois</li>
+                <li>{pluralize(tier.keywords, 'mot-clé', 'mots-clés')} · {pluralize(tier.regions, 'région', 'régions')}</li>
                 <li>Diagnostic client en marque blanche</li>
                 <li>Fiche prospect détaillée</li>
               </ul>
