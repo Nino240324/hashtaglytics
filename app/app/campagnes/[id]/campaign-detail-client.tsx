@@ -67,6 +67,15 @@ function formatRankRange(p: Prospect): string {
   return `${p.best_rank}e`;
 }
 
+// Same logic as /app/prospects -- Google's own term for a listing with
+// no public shopfront is "zone desservie", not the invented "Zone
+// d'intervention". campaign_commune comes from the row itself
+// (prospect_view), so this works the same way here as there.
+function formatCityOrServiceArea(p: Prospect): string {
+  if (p.city !== null) return p.city;
+  return p.campaign_commune ? `Zone desservie \u00b7 ${p.campaign_commune}` : 'Zone desservie';
+}
+
 const POLL_INTERVAL_MS = 3000;
 
 type StageDone = {
@@ -390,7 +399,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
                     <tr key={p.id}>
                       <td className="cell-name" data-label="Entreprise">
                         <div className="biz">{p.business_name}</div>
-                        <div className="loc">{p.city ?? 'Zone d\u2019intervention'}</div>
+                        <div className="loc">{formatCityOrServiceArea(p)}</div>
                       </td>
                       <td className="mono-num" data-label="Position">{formatRankRange(p)}</td>
                       {/* Always populated -- delivered leads always have a
