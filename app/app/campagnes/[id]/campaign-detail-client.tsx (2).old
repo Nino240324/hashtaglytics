@@ -22,6 +22,7 @@ import {
   fetchCampaign,
   fetchCampaignProgress,
   fetchProspectsForCampaign,
+  computeCampaignFunnel,
   getEmailCellState,
   getFicheGoogleState,
   hasPhoneMismatch,
@@ -95,31 +96,45 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   // polls (a count that stopped rising), not a poll-counter or timer.
   const prevProgressRef = useRef<CampaignProgress | null>(null);
 
-  // Initial paint calls the same real fetchCampaignProgress the poll
-  // uses, rather than a simulated seed -- the real numbers are shown
-  // immediately, with no fake intermediate guess ever displayed. (An
-  // earlier version of this comment explained avoiding this function for
-  // the first paint because calling it would ADVANCE mock state -- that
-  // was true of the old mock-era implementation, not the real,
-  // read-only query this now is; calling it here doesn't mutate
-  // anything, so that concern no longer applies.)
+  // Initial paint uses fetchCampaign (read-only) to seed progress from the
+  // campaign's CURRENT stored numbers, deliberately not
+  // fetchCampaignProgress (which advances state every call it's given).
+  // Calling the polling function for the very first paint would skip
+  // straight past scanned === 0 on a fresh campaign -- Phase 1 would
+  // never actually be visible, only ever inferable. The funnel counts are
+  // computed the same way the live poll computes them, via the shared
+  // pure function, so the first paint is consistent with every poll after
+  // it -- not a different formula that happens to agree by coincidence.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      fetchCampaign(campaignId),
-      fetchCampaignProgress(campaignId),
-      fetchProspectsForCampaign(campaignId),
-    ]).then(([c, prog, matching]) => {
-      if (cancelled) return;
-      if (c === null || prog === null) {
-        setNotFound(true);
-        return;
-      }
-      setCampaign(c);
-      setProgress(prog);
-      prevProgressRef.current = prog;
-      setProspects(matching);
-    });
+    Promise.all([fetchCampaign(campaignId), fetchProspectsForCampaign(campaignId)]).then(
+      ([c, matching]) => {
+        if (cancelled) return;
+        if (c === null) {
+          setNotFound(true);
+          return;
+        }
+        setCampaign(c);
+        const total = c.total_grids;
+        const scanned = c.completed_grids;
+        const scanPct = total > 0 ? scanned / total : 0;
+        const funnel = computeCampaignFunnel(c.businesses_found, scanPct, matching.length);
+        const initial: CampaignProgress = {
+          total,
+          scanned,
+          inFlight: scanned >= total ? 0 : Math.min(8, total - scanned),
+          businesses: c.businesses_found,
+          ...funnel,
+          // Not part of computeCampaignFunnel's simulation -- these two
+          // only ever come from the real poll (campaign_progress_view).
+          // Honestly 0 on this first, non-mutating paint.
+          sitesAnalysed: 0,
+          emailsVerified: 0,
+        };
+        setProgress(initial);
+        prevProgressRef.current = initial;
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -137,20 +152,16 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       const prev = prevProgressRef.current;
 
       const scanDone = next.scanned >= next.total;
-      // A count stuck at exactly 0 across two polls also "stopped
-      // rising" -- without the > 0 check, a stage that never started at
-      // all reads identically to one that genuinely finished. Applied
-      // to every stage, not just the two new ones.
       const qualificationDone =
-        scanDone && next.leadsQualified > 0 && prev !== null && next.leadsQualified === prev.leadsQualified;
+        scanDone && prev !== null && next.leadsQualified === prev.leadsQualified;
       const enrichmentDone =
-        qualificationDone && next.leadsEnriched > 0 && prev !== null && next.leadsEnriched === prev.leadsEnriched;
+        qualificationDone && prev !== null && next.leadsEnriched === prev.leadsEnriched;
       const deliveryDone =
-        enrichmentDone && next.leadsDelivered > 0 && prev !== null && next.leadsDelivered === prev.leadsDelivered;
+        enrichmentDone && prev !== null && next.leadsDelivered === prev.leadsDelivered;
       const sitesAnalysedDone =
-        deliveryDone && next.sitesAnalysed > 0 && prev !== null && next.sitesAnalysed === prev.sitesAnalysed;
+        deliveryDone && prev !== null && next.sitesAnalysed === prev.sitesAnalysed;
       const emailsVerifiedDone =
-        sitesAnalysedDone && next.emailsVerified > 0 && prev !== null && next.emailsVerified === prev.emailsVerified;
+        sitesAnalysedDone && prev !== null && next.emailsVerified === prev.emailsVerified;
 
       prevProgressRef.current = next;
       setProgress(next);
@@ -225,9 +236,10 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
         ? 'Terminée'
         : 'En cours';
 
-  // leadsDelivered comes directly from the real query now (fetchCampaignProgress
-  // -- campaign_progress_view, one row per delivered lead) -- no separate
-  // client-side percentage guess or capping logic involved.
+  // leadsDelivered from the poll IS the authoritative reveal count now --
+  // no separate client-side percentage guess. It's already capped at
+  // prospects.length inside computeCampaignFunnel, so slicing here is
+  // just applying that count to the actual rows.
   const visibleProspects = prospects.slice(0, progress.leadsDelivered);
 
   return (
