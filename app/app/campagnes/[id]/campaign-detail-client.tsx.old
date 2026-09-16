@@ -57,6 +57,17 @@ function formatPhoneFR(e164: string | null): string {
   return national.replace(/(\d{2})(?=\d)/g, '$1 ');
 }
 
+// Same logic as /app/prospects -- "13e -> 55e" when the business's rank
+// varied across grid points, "42e" alone when it didn't, "—" only when
+// never measured. Never renders "42e -> 42e", which would read as a bug.
+function formatRankRange(p: Prospect): string {
+  if (p.best_rank === null) return '\u2014';
+  if (p.rank_spread !== null && p.rank_spread > 0) {
+    return `${p.best_rank}e \u2192 ${p.worst_rank}e`;
+  }
+  return `${p.best_rank}e`;
+}
+
 const POLL_INTERVAL_MS = 3000;
 
 type StageDone = { qualification: boolean; enrichment: boolean; delivery: boolean };
@@ -303,7 +314,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
                         <div className="biz">{p.business_name}</div>
                         <div className="loc">{p.city ?? 'Zone d\u2019intervention'}</div>
                       </td>
-                      <td className="mono-num" data-label="Position">{p.maps_position}</td>
+                      <td className="mono-num" data-label="Position">{formatRankRange(p)}</td>
                       {/* Always populated -- delivered leads always have a
                           score (delivery orders by score). Same invariant
                           as /app/prospects. */}

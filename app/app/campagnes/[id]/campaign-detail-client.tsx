@@ -70,8 +70,20 @@ function formatRankRange(p: Prospect): string {
 
 const POLL_INTERVAL_MS = 3000;
 
-type StageDone = { qualification: boolean; enrichment: boolean; delivery: boolean };
-const NO_STAGES_DONE: StageDone = { qualification: false, enrichment: false, delivery: false };
+type StageDone = {
+  qualification: boolean;
+  enrichment: boolean;
+  delivery: boolean;
+  sitesAnalysed: boolean;
+  emailsVerified: boolean;
+};
+const NO_STAGES_DONE: StageDone = {
+  qualification: false,
+  enrichment: false,
+  delivery: false,
+  sitesAnalysed: false,
+  emailsVerified: false,
+};
 
 export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -113,6 +125,11 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
           inFlight: scanned >= total ? 0 : Math.min(8, total - scanned),
           businesses: c.businesses_found,
           ...funnel,
+          // Not part of computeCampaignFunnel's simulation -- these two
+          // only ever come from the real poll (campaign_progress_view).
+          // Honestly 0 on this first, non-mutating paint.
+          sitesAnalysed: 0,
+          emailsVerified: 0,
         };
         setProgress(initial);
         prevProgressRef.current = initial;
@@ -141,16 +158,26 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
         qualificationDone && prev !== null && next.leadsEnriched === prev.leadsEnriched;
       const deliveryDone =
         enrichmentDone && prev !== null && next.leadsDelivered === prev.leadsDelivered;
+      const sitesAnalysedDone =
+        deliveryDone && prev !== null && next.sitesAnalysed === prev.sitesAnalysed;
+      const emailsVerifiedDone =
+        sitesAnalysedDone && prev !== null && next.emailsVerified === prev.emailsVerified;
 
       prevProgressRef.current = next;
       setProgress(next);
-      setStageDone({ qualification: qualificationDone, enrichment: enrichmentDone, delivery: deliveryDone });
+      setStageDone({
+        qualification: qualificationDone,
+        enrichment: enrichmentDone,
+        delivery: deliveryDone,
+        sitesAnalysed: sitesAnalysedDone,
+        emailsVerified: emailsVerifiedDone,
+      });
 
       const matching = await fetchProspectsForCampaign(campaignId);
       setProspects(matching);
     }
 
-    if (stageDone.delivery) {
+    if (stageDone.emailsVerified) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
@@ -159,7 +186,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [campaign, campaignId, stageDone.delivery]);
+  }, [campaign, campaignId, stageDone.emailsVerified]);
 
   if (notFound) {
     return (
@@ -182,6 +209,33 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   const scanDone = progress.scanned >= progress.total;
   const phase1 = progress.scanned === 0;
 
+  // "Terminée" reflects all six stages, NOT campaigns.status -- that
+  // column turns 'completed' the moment the scan alone finishes
+  // (complete_grid_point), while enrichment/delivery/site-analysis/
+  // email-verification all still run afterwards. Read directly, before
+  // #19b and #24 ever ran, it would call a campaign finished while two
+  // of its six stages sat at zero. failed/paused/quota_reached are
+  // genuine, separate interruptions, not about stage completion at all,
+  // so those still come from campaigns.status directly.
+  //
+  // campaigns.status ITSELF is never written here -- enforce_max_campaigns
+  // counts it, and holding a campaign "active" until emails verify would
+  // block a free-tier agency from starting another for hours after their
+  // leads already arrived.
+  const allStagesDone =
+    scanDone &&
+    stageDone.qualification &&
+    stageDone.enrichment &&
+    stageDone.delivery &&
+    stageDone.sitesAnalysed &&
+    stageDone.emailsVerified;
+  const displayStatusLabel =
+    campaign.status === 'failed' || campaign.status === 'paused' || campaign.status === 'quota_reached'
+      ? STATUS_LABELS[campaign.status]
+      : allStagesDone
+        ? 'Terminée'
+        : 'En cours';
+
   // leadsDelivered from the poll IS the authoritative reveal count now --
   // no separate client-side percentage guess. It's already capped at
   // prospects.length inside computeCampaignFunnel, so slicing here is
@@ -197,8 +251,8 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       </div>
 
       <div className="campaign-detail-meta">
-        <span className={`badge ${scanDone ? 'badge-ok' : 'badge-neutral'}`}>
-          {STATUS_LABELS[campaign.status]}
+        <span className={`badge ${allStagesDone ? 'badge-ok' : 'badge-neutral'}`}>
+          {displayStatusLabel}
         </span>
         <span className="mono-num">
           {campaign.commune.dept_code} · {campaign.commune.region_name}
@@ -246,7 +300,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
                 {progress.scanned} / {progress.total} points balayés ({scanPct}%)
               </span>
               <span className="mono-num scan-businesses">
-                {progress.businesses} entreprises trouvées
+                {progress.businesses} entreprises scannées
               </span>
             </div>
           </div>
@@ -277,6 +331,23 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
                 {stageDone.delivery ? '✓' : '○'}
               </span>
               Livraison <span className="mono-num scan-tick-count">{progress.leadsDelivered}</span>
+            </div>
+            <div
+              className={`scan-tick ${stageDone.sitesAnalysed ? 'done' : stageDone.delivery ? 'active' : ''}`}
+            >
+              <span className="scan-tick-icon" aria-hidden="true">
+                {stageDone.sitesAnalysed ? '✓' : '○'}
+              </span>
+              Analyse du site <span className="mono-num scan-tick-count">{progress.sitesAnalysed}</span>
+            </div>
+            <div
+              className={`scan-tick ${stageDone.emailsVerified ? 'done' : stageDone.sitesAnalysed ? 'active' : ''}`}
+            >
+              <span className="scan-tick-icon" aria-hidden="true">
+                {stageDone.emailsVerified ? '✓' : '○'}
+              </span>
+              Vérification e-mail{' '}
+              <span className="mono-num scan-tick-count">{progress.emailsVerified}</span>
             </div>
           </div>
         </>
