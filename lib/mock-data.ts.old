@@ -94,6 +94,10 @@ export type Prospect = {
   gbp_completeness: number | null; // 0..100. Always populated on a delivered lead (see mbi_fetched_at below).
   is_claimed: boolean | null; // see getFicheGoogleState -- null means "not returned by the provider", not "pending"
   website_kind: 'own' | 'booking_platform' | 'social' | 'directory' | 'none';
+  // The actual URL, only meaningful when website_kind is 'own' -- but
+  // can still be null even then, if the URL was never captured.
+  // website_kind says WHAT SORT of site it is; this says WHERE.
+  website: string | null;
   seo_score: number | null; // 0..100, LOWER = more opportunity. Always populated on a delivered lead, final -- never revised.
   phone: string | null; // from the Google listing, E.164. Available immediately, no marker gate.
   website_phone_raw: string | null; // from the site. Comparison value only -- never its own column.
@@ -203,6 +207,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 20,
     "is_claimed": true,
     "website_kind": "none",
+    "website": null,
     "seo_score": 15,
     "phone": "+33478100000",
     "website_phone_raw": null,
@@ -241,6 +246,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 31,
     "is_claimed": false,
     "website_kind": "booking_platform",
+    "website": null,
     "seo_score": 22,
     "phone": "+33478100137",
     "website_phone_raw": "+33478100137",
@@ -279,6 +285,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 29,
     "is_claimed": false,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 24,
     "phone": "+33478100274",
     "website_phone_raw": "+33478100274",
@@ -317,6 +324,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 53,
     "is_claimed": false,
     "website_kind": "own",
+    "website": "https://exemple-site-1.fr",
     "seo_score": 36,
     "phone": "+33478100411",
     "website_phone_raw": "+33478100411",
@@ -355,6 +363,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 64,
     "is_claimed": null,
     "website_kind": "none",
+    "website": null,
     "seo_score": 43,
     "phone": "+33141005480",
     "website_phone_raw": null,
@@ -393,6 +402,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 75,
     "is_claimed": false,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 50,
     "phone": null,
     "website_phone_raw": "+33142376850",
@@ -431,6 +441,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 44,
     "is_claimed": true,
     "website_kind": "social",
+    "website": null,
     "seo_score": 31,
     "phone": "+33320100822",
     "website_phone_raw": "+33320100822",
@@ -469,6 +480,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 32,
     "is_claimed": false,
     "website_kind": "none",
+    "website": null,
     "seo_score": 64,
     "phone": "+33320100959",
     "website_phone_raw": null,
@@ -507,6 +519,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 43,
     "is_claimed": true,
     "website_kind": "none",
+    "website": null,
     "seo_score": 16,
     "phone": "+33600101096",
     "website_phone_raw": null,
@@ -545,6 +558,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 54,
     "is_claimed": false,
     "website_kind": "social",
+    "website": null,
     "seo_score": 23,
     "phone": "+33600101233",
     "website_phone_raw": "+33600101233",
@@ -583,6 +597,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 65,
     "is_claimed": true,
     "website_kind": "own",
+    "website": "https://exemple-site-2.fr",
     "seo_score": 30,
     "phone": "+33478101370",
     "website_phone_raw": "+33478375370",
@@ -621,6 +636,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 22,
     "is_claimed": false,
     "website_kind": "none",
+    "website": null,
     "seo_score": 19,
     "phone": "+33478101507",
     "website_phone_raw": null,
@@ -659,6 +675,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 22,
     "is_claimed": true,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 44,
     "phone": "+33478101644",
     "website_phone_raw": "+33478101644",
@@ -697,6 +714,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 33,
     "is_claimed": false,
     "website_kind": "social",
+    "website": null,
     "seo_score": 51,
     "phone": "+33141017810",
     "website_phone_raw": "+33141017810",
@@ -735,6 +753,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 44,
     "is_claimed": true,
     "website_kind": "own",
+    "website": "https://exemple-site-3.fr",
     "seo_score": 58,
     "phone": "+33141019180",
     "website_phone_raw": "+33141019180",
@@ -773,6 +792,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 55,
     "is_claimed": null,
     "website_kind": "none",
+    "website": null,
     "seo_score": 65,
     "phone": "+33141020550",
     "website_phone_raw": null,
@@ -811,6 +831,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 66,
     "is_claimed": true,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 17,
     "phone": null,
     "website_phone_raw": "+33320239192",
@@ -849,6 +870,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 57,
     "is_claimed": true,
     "website_kind": "own",
+    "website": "https://exemple-site-4.fr",
     "seo_score": 42,
     "phone": "+33320102329",
     "website_phone_raw": "+33320102329",
@@ -887,6 +909,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 23,
     "is_claimed": true,
     "website_kind": "social",
+    "website": null,
     "seo_score": 31,
     "phone": "+33600102466",
     "website_phone_raw": "+33600102466",
@@ -925,6 +948,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 34,
     "is_claimed": false,
     "website_kind": "none",
+    "website": null,
     "seo_score": 38,
     "phone": "+33600102603",
     "website_phone_raw": null,
@@ -963,6 +987,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 45,
     "is_claimed": true,
     "website_kind": "own",
+    "website": null,
     "seo_score": 45,
     "phone": "+33478102740",
     "website_phone_raw": "+33478102740",
@@ -1001,6 +1026,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 56,
     "is_claimed": false,
     "website_kind": "own",
+    "website": "https://exemple-site-6.fr",
     "seo_score": 52,
     "phone": "+33478102877",
     "website_phone_raw": "+33478376877",
@@ -1039,6 +1065,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 67,
     "is_claimed": true,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 59,
     "phone": "+33478103014",
     "website_phone_raw": "+33478103014",
@@ -1077,6 +1104,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 33,
     "is_claimed": false,
     "website_kind": "none",
+    "website": null,
     "seo_score": 27,
     "phone": "+33478103151",
     "website_phone_raw": null,
@@ -1115,6 +1143,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 24,
     "is_claimed": true,
     "website_kind": "own",
+    "website": "https://exemple-site-7.fr",
     "seo_score": 18,
     "phone": "+33141032880",
     "website_phone_raw": "+33141032880",
@@ -1153,6 +1182,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 35,
     "is_claimed": false,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 25,
     "phone": "+33141034250",
     "website_phone_raw": "+33141034250",
@@ -1191,6 +1221,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 46,
     "is_claimed": null,
     "website_kind": "social",
+    "website": null,
     "seo_score": 32,
     "phone": "+33141035620",
     "website_phone_raw": "+33141035620",
@@ -1229,6 +1260,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 57,
     "is_claimed": false,
     "website_kind": "own",
+    "website": "https://exemple-site-8.fr",
     "seo_score": 39,
     "phone": "+33320103699",
     "website_phone_raw": "+33320103699",
@@ -1267,6 +1299,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 48,
     "is_claimed": true,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 35,
     "phone": "+33320103836",
     "website_phone_raw": "+33320103836",
@@ -1305,6 +1338,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 79,
     "is_claimed": false,
     "website_kind": "none",
+    "website": null,
     "seo_score": 53,
     "phone": null,
     "website_phone_raw": null,
@@ -1343,6 +1377,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 25,
     "is_claimed": true,
     "website_kind": "own",
+    "website": "https://exemple-site-9.fr",
     "seo_score": 60,
     "phone": "+33478104110",
     "website_phone_raw": "+33478104110",
@@ -1381,6 +1416,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 36,
     "is_claimed": false,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 67,
     "phone": "+33478104247",
     "website_phone_raw": "+33478104247",
@@ -1419,6 +1455,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 47,
     "is_claimed": true,
     "website_kind": "none",
+    "website": null,
     "seo_score": 19,
     "phone": "+33478104384",
     "website_phone_raw": null,
@@ -1457,6 +1494,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 61,
     "is_claimed": true,
     "website_kind": "own",
+    "website": null,
     "seo_score": 46,
     "phone": "+33141045210",
     "website_phone_raw": "+33141045210",
@@ -1495,6 +1533,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 69,
     "is_claimed": true,
     "website_kind": "social",
+    "website": null,
     "seo_score": 33,
     "phone": null,
     "website_phone_raw": "+33142416580",
@@ -1533,6 +1572,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 80,
     "is_claimed": false,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 40,
     "phone": "+33141047950",
     "website_phone_raw": "+33141047950",
@@ -1571,6 +1611,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 26,
     "is_claimed": true,
     "website_kind": "own",
+    "website": "https://exemple-site-11.fr",
     "seo_score": 47,
     "phone": "+33320104932",
     "website_phone_raw": "+33320104932",
@@ -1609,6 +1650,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 37,
     "is_claimed": false,
     "website_kind": "directory",
+    "website": null,
     "seo_score": 54,
     "phone": "+33556105069",
     "website_phone_raw": "+33556105069",
@@ -1647,6 +1689,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 26,
     "is_claimed": false,
     "website_kind": "none",
+    "website": null,
     "seo_score": 21,
     "phone": "+33556105206",
     "website_phone_raw": null,
@@ -1685,6 +1728,7 @@ export const mockProspects: Prospect[] = [
     "gbp_completeness": 59,
     "is_claimed": false,
     "website_kind": "social",
+    "website": null,
     "seo_score": 68,
     "phone": "+33556105343",
     "website_phone_raw": "+33556105343",
@@ -4397,10 +4441,17 @@ export type CampaignProgress = {
   total: number;
   scanned: number;
   inFlight: number;
-  businesses: number;
+  businesses: number; // observations (sum across grid points), NOT distinct businesses
+  // All three are the same number, always -- campaign_progress_view only
+  // contains delivered leads to begin with, so "qualified" and "enriched"
+  // here mean "delivered leads at that stage", not the real upstream
+  // funnel (which the browser is deliberately never shown -- see
+  // leads_own_delivered).
   leadsQualified: number;
   leadsEnriched: number;
   leadsDelivered: number; // the one that puts leads on /app/prospects
+  sitesAnalysed: number; // html_checked_at
+  emailsVerified: number; // email_checked_at
 };
 
 // A town campaign is 40-150 grid points and completes in ~3 minutes,
@@ -4457,40 +4508,58 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
   // campaign) -- never query business_grid_positions or anything
   // unbounded here. This runs every 3 seconds; an unbounded query on a
   // 3s poll is the mistake that would make the whole site struggle.
+  // Unchanged from before -- this half was already correct.
   const scanQuery = supabase
     .from('campaign_grids')
     .select('processed_at, status, businesses_found')
     .eq('campaign_id', id);
 
-  // Three separate counts, not one query with all three conditions
-  // chained -- chaining would only answer "how many are both enriched
-  // AND delivered". campaign_id assumed to exist directly on leads, per
-  // the spec's own example -- if this specific query fails, that's the
-  // one thing to check: leads may only carry campaign_grid_id, needing
-  // a join through campaign_grids instead. No way to confirm the live
-  // schema from here, so this is built as given and will fail loudly
-  // (logged below) rather than silently if that assumption is wrong.
+  // campaign_progress_view, NOT prospect_view -- prospect_view's lateral
+  // computes best/worst rank across every grid point per row (what
+  // produces "13e -> 55e" on /app/prospects), which is wasted work here
+  // and exactly the mistake this function's own comment above already
+  // warns against on a poll this frequent.
+  //
+  // Every row in this view is already a delivered lead, so "qualified"
+  // and "enriched" below are really the same count as "delivered" --
+  // the real upstream funnel (how many were qualified/enriched BEFORE
+  // delivery) is deliberately invisible to the browser, restricted by
+  // leads_own_delivered. Querying leads directly for those numbers (the
+  // previous version of this function) returned exactly one number for
+  // both, by design, not a bug in the query itself.
   const qualifiedQuery = supabase
-    .from('leads')
+    .from('campaign_progress_view')
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', id);
   const enrichedQuery = supabase
-    .from('leads')
+    .from('campaign_progress_view')
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', id)
     .not('mbi_fetched_at', 'is', null);
   const deliveredQuery = supabase
-    .from('leads')
+    .from('campaign_progress_view')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', id);
+  const sitesAnalysedQuery = supabase
+    .from('campaign_progress_view')
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', id)
-    .not('delivered_at', 'is', null);
+    .not('html_checked_at', 'is', null);
+  const emailsVerifiedQuery = supabase
+    .from('campaign_progress_view')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', id)
+    .not('email_checked_at', 'is', null);
 
-  const [scanResult, qualifiedResult, enrichedResult, deliveredResult] = await Promise.all([
-    scanQuery,
-    qualifiedQuery,
-    enrichedQuery,
-    deliveredQuery,
-  ]);
+  const [scanResult, qualifiedResult, enrichedResult, deliveredResult, sitesAnalysedResult, emailsVerifiedResult] =
+    await Promise.all([
+      scanQuery,
+      qualifiedQuery,
+      enrichedQuery,
+      deliveredQuery,
+      sitesAnalysedQuery,
+      emailsVerifiedQuery,
+    ]);
 
   if (scanResult.error) {
     console.error('fetchCampaignProgress: campaign_grids query failed', scanResult.error);
@@ -4503,6 +4572,12 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
   }
   if (deliveredResult.error) {
     console.error('fetchCampaignProgress: delivered count failed', deliveredResult.error);
+  }
+  if (sitesAnalysedResult.error) {
+    console.error('fetchCampaignProgress: sites-analysed count failed', sitesAnalysedResult.error);
+  }
+  if (emailsVerifiedResult.error) {
+    console.error('fetchCampaignProgress: emails-verified count failed', emailsVerifiedResult.error);
   }
 
   const gridRows = (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
@@ -4526,6 +4601,8 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
     leadsQualified: qualifiedResult.count ?? 0,
     leadsEnriched: enrichedResult.count ?? 0,
     leadsDelivered: deliveredResult.count ?? 0,
+    sitesAnalysed: sitesAnalysedResult.count ?? 0,
+    emailsVerified: emailsVerifiedResult.count ?? 0,
   };
 }
 

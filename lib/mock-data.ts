@@ -4451,7 +4451,18 @@ export type CampaignProgress = {
   leadsEnriched: number;
   leadsDelivered: number; // the one that puts leads on /app/prospects
   sitesAnalysed: number; // html_checked_at
+  // The true denominator for the site stage -- not every delivered lead
+  // has a website at all (website_kind 'none' never gets
+  // html_checked_at). Done means sitesAnalysed === sitesEligible, not
+  // sitesAnalysed > 0.
+  sitesEligible: number;
   emailsVerified: number; // email_checked_at
+  // The true denominator for the email stage -- only leads where the
+  // SITE PASS found an address are eligible. This number is only
+  // meaningful once the site stage is done (email_eligible depends on
+  // that pass having run); read early, it's near-zero for a reason
+  // unrelated to how many addresses actually exist.
+  emailsEligible: number;
 };
 
 // A town campaign is 40-150 grid points and completes in ~3 minutes,
@@ -4545,21 +4556,41 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', id)
     .not('html_checked_at', 'is', null);
+  const sitesEligibleQuery = supabase
+    .from('campaign_progress_view')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', id)
+    .eq('site_eligible', true);
   const emailsVerifiedQuery = supabase
     .from('campaign_progress_view')
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', id)
     .not('email_checked_at', 'is', null);
+  const emailsEligibleQuery = supabase
+    .from('campaign_progress_view')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', id)
+    .eq('email_eligible', true);
 
-  const [scanResult, qualifiedResult, enrichedResult, deliveredResult, sitesAnalysedResult, emailsVerifiedResult] =
-    await Promise.all([
-      scanQuery,
-      qualifiedQuery,
-      enrichedQuery,
-      deliveredQuery,
-      sitesAnalysedQuery,
-      emailsVerifiedQuery,
-    ]);
+  const [
+    scanResult,
+    qualifiedResult,
+    enrichedResult,
+    deliveredResult,
+    sitesAnalysedResult,
+    sitesEligibleResult,
+    emailsVerifiedResult,
+    emailsEligibleResult,
+  ] = await Promise.all([
+    scanQuery,
+    qualifiedQuery,
+    enrichedQuery,
+    deliveredQuery,
+    sitesAnalysedQuery,
+    sitesEligibleQuery,
+    emailsVerifiedQuery,
+    emailsEligibleQuery,
+  ]);
 
   if (scanResult.error) {
     console.error('fetchCampaignProgress: campaign_grids query failed', scanResult.error);
@@ -4576,8 +4607,14 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
   if (sitesAnalysedResult.error) {
     console.error('fetchCampaignProgress: sites-analysed count failed', sitesAnalysedResult.error);
   }
+  if (sitesEligibleResult.error) {
+    console.error('fetchCampaignProgress: sites-eligible count failed', sitesEligibleResult.error);
+  }
   if (emailsVerifiedResult.error) {
     console.error('fetchCampaignProgress: emails-verified count failed', emailsVerifiedResult.error);
+  }
+  if (emailsEligibleResult.error) {
+    console.error('fetchCampaignProgress: emails-eligible count failed', emailsEligibleResult.error);
   }
 
   const gridRows = (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
@@ -4602,7 +4639,9 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
     leadsEnriched: enrichedResult.count ?? 0,
     leadsDelivered: deliveredResult.count ?? 0,
     sitesAnalysed: sitesAnalysedResult.count ?? 0,
+    sitesEligible: sitesEligibleResult.count ?? 0,
     emailsVerified: emailsVerifiedResult.count ?? 0,
+    emailsEligible: emailsEligibleResult.count ?? 0,
   };
 }
 

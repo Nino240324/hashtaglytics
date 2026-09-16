@@ -139,18 +139,29 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       const scanDone = next.scanned >= next.total;
       // A count stuck at exactly 0 across two polls also "stopped
       // rising" -- without the > 0 check, a stage that never started at
-      // all reads identically to one that genuinely finished. Applied
-      // to every stage, not just the two new ones.
+      // all reads identically to one that genuinely finished. Applies
+      // to these three, which have no fixed "eligible" denominator to
+      // compare against (unlike the two below).
       const qualificationDone =
         scanDone && next.leadsQualified > 0 && prev !== null && next.leadsQualified === prev.leadsQualified;
       const enrichmentDone =
         qualificationDone && next.leadsEnriched > 0 && prev !== null && next.leadsEnriched === prev.leadsEnriched;
       const deliveryDone =
         enrichmentDone && next.leadsDelivered > 0 && prev !== null && next.leadsDelivered === prev.leadsDelivered;
-      const sitesAnalysedDone =
-        deliveryDone && next.sitesAnalysed > 0 && prev !== null && next.sitesAnalysed === prev.sitesAnalysed;
-      const emailsVerifiedDone =
-        sitesAnalysedDone && next.emailsVerified > 0 && prev !== null && next.emailsVerified === prev.emailsVerified;
+      // Not "processed > 0 and stopped rising" -- not every delivered
+      // lead is eligible (website_kind 'none' never gets
+      // html_checked_at), so eligible may genuinely be 0, in which case
+      // the stage is correctly done immediately, not stalled. Done means
+      // every ELIGIBLE lead has been processed -- a definitive test
+      // against the true denominator, not a stability heuristic.
+      const sitesAnalysedDone = deliveryDone && next.sitesAnalysed === next.sitesEligible;
+      // Deliberately NOT evaluated at all until the site stage is done --
+      // emailsEligible depends on the site pass having found an address,
+      // so early on it's near-zero for a reason unrelated to how many
+      // addresses actually exist. Evaluating "0 = 0" before the site
+      // pass has run would tick this done before its own dependency has
+      // even started.
+      const emailsVerifiedDone = sitesAnalysedDone && next.emailsVerified === next.emailsEligible;
 
       prevProgressRef.current = next;
       setProgress(next);
@@ -326,7 +337,10 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
               <span className="scan-tick-icon" aria-hidden="true">
                 {stageDone.sitesAnalysed ? '✓' : '○'}
               </span>
-              Analyse du site <span className="mono-num scan-tick-count">{progress.sitesAnalysed}</span>
+              Analyse du site{' '}
+              <span className="mono-num scan-tick-count">
+                {progress.sitesAnalysed}/{progress.sitesEligible}
+              </span>
             </div>
             <div
               className={`scan-tick ${stageDone.emailsVerified ? 'done' : stageDone.sitesAnalysed ? 'active' : ''}`}
@@ -335,7 +349,12 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
                 {stageDone.emailsVerified ? '✓' : '○'}
               </span>
               Vérification e-mail{' '}
-              <span className="mono-num scan-tick-count">{progress.emailsVerified}</span>
+              <span className="mono-num scan-tick-count">
+                {/* emailsEligible isn't meaningful until the site pass has
+                    run -- a dash here is honest; "0/0" would look like a
+                    real, finished count rather than "not yet knowable". */}
+                {stageDone.sitesAnalysed ? `${progress.emailsVerified}/${progress.emailsEligible}` : '\u2014'}
+              </span>
             </div>
           </div>
         </>
