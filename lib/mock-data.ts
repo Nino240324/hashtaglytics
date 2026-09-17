@@ -4265,11 +4265,46 @@ const mockBrandInfo: BrandInfo = {
 };
 
 export async function fetchAccountInfo(): Promise<AccountInfo> {
-  return mockAccountInfo;
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || data.user === null) {
+    console.error('fetchAccountInfo: getUser failed', error);
+    return mockAccountInfo;
+  }
+  return {
+    // No real source for this yet -- Supabase Auth has no generic name
+    // field, and this isn't agencyName (a separate, already-real field
+    // on BrandInfo below). Left as the mock value pending a decision on
+    // where a personal name should actually live.
+    name: mockAccountInfo.name,
+    email: data.user.email ?? '',
+  };
 }
 
 export async function fetchBrandInfo(): Promise<BrandInfo> {
-  return mockBrandInfo;
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('agencies')
+    .select('agency_name, logo_url, primary_colour, contact_email, contact_phone')
+    .single();
+  if (error || data === null) {
+    console.error('fetchBrandInfo query failed', error);
+    return { agencyName: '', logoUrl: null, primaryColour: '#1E3A72', contactPhone: null, contactEmail: null };
+  }
+  const row = data as {
+    agency_name: string;
+    logo_url: string | null;
+    primary_colour: string;
+    contact_email: string | null;
+    contact_phone: string | null;
+  };
+  return {
+    agencyName: row.agency_name,
+    logoUrl: row.logo_url,
+    primaryColour: row.primary_colour,
+    contactPhone: row.contact_phone,
+    contactEmail: row.contact_email,
+  };
 }
 
 // STUBS -- update the in-memory mock so the UI reflects a save
@@ -4286,11 +4321,85 @@ export async function updateAccountInfo(input: {
   return { ok: true, message: 'Enregistré localement. La sauvegarde réelle n\u2019est pas encore câblée.' };
 }
 
-export async function updateBrandInfo(
-  input: Partial<Omit<BrandInfo, 'logoUrl'>>,
-): Promise<{ ok: true; message: string }> {
-  Object.assign(mockBrandInfo, input);
-  return { ok: true, message: 'Enregistré localement. La sauvegarde réelle n\u2019est pas encore câblée.' };
+const HEX_COLOUR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+const CONTACT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LOGO_EXTENSION_BY_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/svg+xml': 'svg',
+};
+
+export async function updateBrandInfo(input: {
+  agencyName: string;
+  primaryColour: string;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  logoFile: File | null; // null -- logo_url left untouched; provided -- uploaded first, then included
+}): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+  // Both primary_colour and contact_email carry a CHECK constraint on
+  // agencies. Validated here, before anything is sent, so an invalid
+  // value shows a clear French message rather than a raw Postgres
+  // error surfacing from the update below.
+  if (!HEX_COLOUR_PATTERN.test(input.primaryColour)) {
+    return { ok: false, message: 'Couleur invalide. Format attendu : #RRGGBB (6 chiffres hexadécimaux).' };
+  }
+  if (input.contactEmail !== null && input.contactEmail !== '' && !CONTACT_EMAIL_PATTERN.test(input.contactEmail)) {
+    return { ok: false, message: 'Adresse e-mail de contact invalide.' };
+  }
+
+  const supabase = createClient();
+
+  // agency_id isn't otherwise available on the client -- resolved here
+  // via the same RLS scoping fetchBrandInfo and every other agencies
+  // query already relies on (no explicit filter needed for a SELECT;
+  // the UPDATE below still needs the id explicitly).
+  const { data: agencyRow, error: agencyIdError } = await supabase.from('agencies').select('id').single();
+  if (agencyIdError || agencyRow === null) {
+    console.error('updateBrandInfo: could not resolve agency id', agencyIdError);
+    return { ok: false, message: 'Impossible de déterminer votre agence. Réessayez.' };
+  }
+  const agencyId = (agencyRow as { id: string }).id;
+
+  let logoUrl: string | undefined;
+  if (input.logoFile !== null) {
+    // The folder MUST be the agency id -- the storage policy checks it;
+    // without that, any agency could overwrite another's logo.
+    const ext = LOGO_EXTENSION_BY_MIME[input.logoFile.type] ?? 'png';
+    const path = `${agencyId}/logo.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from('agency-logos')
+      .upload(path, input.logoFile, { upsert: true, contentType: input.logoFile.type });
+    if (uploadError) {
+      console.error('updateBrandInfo: logo upload failed', uploadError);
+      return { ok: false, message: 'Le téléversement du logo a échoué. Réessayez.' };
+    }
+    // The bucket is public, deliberately -- a signed URL would expire
+    // between PDF renders and the masthead would silently fall back to
+    // text.
+    const { data: publicUrlData } = supabase.storage.from('agency-logos').getPublicUrl(path);
+    logoUrl = publicUrlData.publicUrl;
+  }
+
+  // Only these five columns are granted on agencies -- subscription_tier_id,
+  // subscription_status, stripe_customer_id and user_id are deliberately
+  // not, so including any of them would make the whole statement fail.
+  // logo_url is included only when a new file was actually uploaded.
+  const { error: updateError } = await supabase
+    .from('agencies')
+    .update({
+      agency_name: input.agencyName,
+      primary_colour: input.primaryColour,
+      contact_email: input.contactEmail,
+      contact_phone: input.contactPhone,
+      ...(logoUrl !== undefined ? { logo_url: logoUrl } : {}),
+    })
+    .eq('id', agencyId);
+  if (updateError) {
+    console.error('updateBrandInfo: agencies update failed', updateError);
+    return { ok: false, message: 'Erreur lors de l\u2019enregistrement. Réessayez.' };
+  }
+
+  return { ok: true, message: 'Enregistré.' };
 }
 
 // Placeholder used only when a campaign has neither a linked commune
