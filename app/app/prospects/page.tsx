@@ -18,6 +18,7 @@ import {
   fetchHasAnyProspects,
   fetchProspects,
   fetchProspectStatusCounts,
+  renderProspectPdf,
   getAvailableCities,
   getAvailableKeywords,
   getEmailCellState,
@@ -59,17 +60,6 @@ const OUTCOME_OPTIONS: { value: string; label: string; outcome: Prospect['outcom
 function outcomeToOptionValue(outcome: Prospect['outcome']): string {
   const match = OUTCOME_OPTIONS.find((o) => o.outcome === outcome);
   return match ? match.value : 'a_traiter';
-}
-
-// PDF row actions — corrected per Opus. There is one client document
-// ("le diagnostic"), not two: the earlier separate "Diagnostic" (view) and
-// "PDF client" (download) actions pointed at the same underlying file.
-// The real PDF service exposes GET /pdf/:leadId with
-// Content-Disposition: inline, so a browser tab IS the viewer — no
-// embedded iframe (inconsistent across browsers), print/download come
-// free with the tab. Base URL is not confirmed yet, hence the stub.
-function diagnosticUrl(leadId: string): string {
-  return `/pdf/${leadId}`; // STUB — confirm the real PDF service base URL before wiring
 }
 
 function formatPhoneFR(e164: string | null): string {
@@ -403,11 +393,19 @@ function ProspectCard({
   isExpanded,
   onToggleExpand,
   onStatusChange,
+  onRenderPdf,
+  pdfLoadingClient,
+  pdfLoadingAgency,
+  pdfError,
 }: {
   p: Prospect;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onStatusChange: (id: string, value: string) => Promise<void>;
+  onRenderPdf: (leadId: string, kind: 'client' | 'agency') => Promise<void>;
+  pdfLoadingClient: boolean;
+  pdfLoadingAgency: boolean;
+  pdfError: string | null;
 }) {
   const ficheState = getFicheGoogleState(p);
   const phoneMismatch = hasPhoneMismatch(p);
@@ -505,16 +503,14 @@ function ProspectCard({
         <div className="prospect-card-detail">
           <LeadDetailPanel p={p} />
           <div className="prospect-card-actions">
-            <button
-              type="button"
-              onClick={() => window.open(diagnosticUrl(p.id), '_blank', 'noopener,noreferrer')}
-            >
-              Voir le diagnostic
+            <button type="button" disabled={pdfLoadingClient} onClick={() => onRenderPdf(p.id, 'client')}>
+              {pdfLoadingClient ? 'Génération…' : 'Fiche prospect'}
             </button>
-            <button type="button" disabled title="Fiche agence — endpoint pas encore confirmé">
-              Fiche prospect
+            <button type="button" disabled={pdfLoadingAgency} onClick={() => onRenderPdf(p.id, 'agency')}>
+              {pdfLoadingAgency ? 'Génération…' : 'Fiche agence'}
             </button>
           </div>
+          {pdfError && <p className="settings-error-note">{pdfError}</p>}
         </div>
       )}
     </div>
@@ -882,6 +878,37 @@ function ProspectsPageInner() {
 
   function toggleExpanded(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
+  }
+
+  // Keyed by `${leadId}-${kind}` -- each row has two independent PDF
+  // buttons (client, agency), each able to be loading or erroring on
+  // its own.
+  const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({});
+  const [pdfError, setPdfError] = useState<Record<string, string | null>>({});
+
+  async function handleRenderPdf(leadId: string, kind: 'client' | 'agency') {
+    const key = `${leadId}-${kind}`;
+    // Opened synchronously, inside the click handler, before any
+    // await -- Safari and sometimes Chrome block window.open as a
+    // popup specifically when it's separated from the click by an
+    // await, which is exactly what awaiting the fetch first would do.
+    const tab = window.open('', '_blank');
+    setPdfLoading((prev) => ({ ...prev, [key]: true }));
+    setPdfError((prev) => ({ ...prev, [key]: null }));
+
+    const result = await renderProspectPdf(leadId, kind);
+
+    setPdfLoading((prev) => ({ ...prev, [key]: false }));
+    if (!result.ok) {
+      setPdfError((prev) => ({ ...prev, [key]: result.message }));
+      if (tab) tab.close();
+      return;
+    }
+    if (tab) {
+      tab.location.href = result.url;
+    } else {
+      window.location.href = result.url;
+    }
   }
 
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -1391,16 +1418,24 @@ function ProspectsPageInner() {
                         <div className="row-actions">
                           <button
                             type="button"
-                            onClick={() =>
-                              window.open(diagnosticUrl(p.id), '_blank', 'noopener,noreferrer')
-                            }
+                            disabled={pdfLoading[`${p.id}-client`] === true}
+                            onClick={() => handleRenderPdf(p.id, 'client')}
                           >
-                            Voir le diagnostic
+                            {pdfLoading[`${p.id}-client`] ? 'Génération…' : 'Fiche prospect'}
                           </button>
-                          <button type="button" disabled title="Fiche agence — endpoint pas encore confirmé">
-                            Fiche prospect
+                          <button
+                            type="button"
+                            disabled={pdfLoading[`${p.id}-agency`] === true}
+                            onClick={() => handleRenderPdf(p.id, 'agency')}
+                          >
+                            {pdfLoading[`${p.id}-agency`] ? 'Génération…' : 'Fiche agence'}
                           </button>
                         </div>
+                        {(pdfError[`${p.id}-client`] || pdfError[`${p.id}-agency`]) && (
+                          <p className="settings-error-note">
+                            {pdfError[`${p.id}-client`] || pdfError[`${p.id}-agency`]}
+                          </p>
+                        )}
                       </td>
                     </tr>
                     {isExpanded && (
@@ -1427,6 +1462,10 @@ function ProspectsPageInner() {
                   isExpanded={expandedId === p.id}
                   onToggleExpand={() => toggleExpanded(p.id)}
                   onStatusChange={handleStatusChange}
+                  onRenderPdf={handleRenderPdf}
+                  pdfLoadingClient={pdfLoading[`${p.id}-client`] === true}
+                  pdfLoadingAgency={pdfLoading[`${p.id}-agency`] === true}
+                  pdfError={pdfError[`${p.id}-client`] || pdfError[`${p.id}-agency`] || null}
                 />
               ))}
             </div>

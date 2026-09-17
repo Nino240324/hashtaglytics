@@ -3916,6 +3916,71 @@ export async function updateProspectOutcome(
   }
 }
 
+export type PdfRenderResult =
+  | { ok: true; url: string; filename: string; cached: boolean }
+  | { ok: false; message: string };
+
+// Shared by both PDF buttons. kind stays 'client' | 'agency' internally
+// -- tied to pdf_url_customer / pdf_url_agency -- even though the
+// user-facing labels are changing (Fiche prospect / Fiche agence).
+// RENDER_URL is an env var, not a hardcoded string, since it's
+// localhost today and becomes a real Render URL once deployed.
+export async function renderProspectPdf(
+  leadId: string,
+  kind: 'client' | 'agency',
+): Promise<PdfRenderResult> {
+  const supabase = createClient();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || sessionData.session === null) {
+    return { ok: false, message: 'Session expirée. Reconnectez-vous.' };
+  }
+
+  const renderUrl = process.env.NEXT_PUBLIC_PDF_RENDER_URL;
+  if (!renderUrl) {
+    console.error('renderProspectPdf: NEXT_PUBLIC_PDF_RENDER_URL is not set');
+    return { ok: false, message: 'Service de génération non configuré.' };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${renderUrl}/render`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ lead_id: leadId, kind }),
+    });
+  } catch (err) {
+    console.error('renderProspectPdf: fetch failed', err);
+    return { ok: false, message: 'Le document n\u2019a pas pu être généré. Réessayez.' };
+  }
+
+  // 401 -- token expired. 404 -- deliberately the same answer whether
+  // the lead isn't yours or doesn't exist at all (a 403 would confirm
+  // it exists), so the message here stays equally vague, not filled in
+  // with a guess. 429 -- the only one the user can actually act on, so
+  // the only one with a specific, actionable message. 500 -- the
+  // service logs the detail and says nothing on purpose; matched here
+  // with an equally generic message, not invented detail.
+  if (res.status === 401) {
+    return { ok: false, message: 'Session expirée. Reconnectez-vous.' };
+  }
+  if (res.status === 404) {
+    return { ok: false, message: 'Document introuvable.' };
+  }
+  if (res.status === 429) {
+    return { ok: false, message: 'Trop de documents demandés, patientez une minute.' };
+  }
+  if (!res.ok) {
+    console.error('renderProspectPdf: render failed', res.status);
+    return { ok: false, message: 'Le document n\u2019a pas pu être généré. Réessayez.' };
+  }
+
+  const body = (await res.json()) as { url: string; filename: string; cached: boolean };
+  return { ok: true, url: body.url, filename: body.filename, cached: body.cached };
+}
+
 // Now async against real data -- callers updated accordingly
 // (prospects/page.tsx). No DISTINCT in PostgREST, so dedupe happens
 // client-side; fine at ~107 rows, would become an RPC if that ever
