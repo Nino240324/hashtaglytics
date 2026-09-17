@@ -22,7 +22,6 @@ import { createClient } from '@/lib/supabase/client';
 import {
   fetchAccountInfo,
   fetchBrandInfo,
-  updateAccountInfo,
   updateBrandInfo,
   type AccountInfo,
   type BrandInfo,
@@ -159,21 +158,27 @@ export default function ParametresPage() {
       return;
     }
 
-    // Name has no real destination yet -- Supabase Auth has no generic
-    // name field, and this isn't the agency name (a separate field
-    // under Ma marque). Still a stub pending that decision.
-    const nameResult = await updateAccountInfo({ name: nameInput, email: emailInput });
+    const supabase = createClient();
 
-    const emailChanged = emailInput !== account?.email;
-    if (!emailChanged) {
-      setAccountMessage(nameResult.message);
+    // Appears on page 3 of the client PDF ("Parlons-en") alongside the
+    // agency name -- so a prospect knows which PERSON to call, not just
+    // which company. Lives in auth.users.raw_user_meta_data, not any
+    // table.
+    const { error: nameError } = await supabase.auth.updateUser({ data: { full_name: nameInput } });
+    if (nameError) {
+      setAccountError(nameError.message);
       return;
     }
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ email: emailInput });
-    if (error) {
-      setAccountError(error.message);
+    const emailChanged = emailInput !== account?.email;
+    if (!emailChanged) {
+      setAccountMessage('Enregistré.');
+      return;
+    }
+
+    const { error: emailError } = await supabase.auth.updateUser({ email: emailInput });
+    if (emailError) {
+      setAccountError(emailError.message);
       return;
     }
     // Not immediate -- Supabase sends a confirmation link to the NEW
@@ -183,15 +188,15 @@ export default function ParametresPage() {
     setAccountMessage(
       'Un e-mail de confirmation a été envoyé à la nouvelle adresse. Votre e-mail de connexion ne changera qu\u2019après avoir cliqué le lien qu\u2019il contient.',
     );
+    // The field shows the OLD address again, not the new, unconfirmed
+    // one -- otherwise a user who never clicks the confirmation link
+    // believes the change already happened.
+    setEmailInput(account?.email ?? '');
   }
 
   async function handlePasswordSave(e: { preventDefault(): void }) {
     e.preventDefault();
     setPasswordMessage(null);
-    if (newPassword.length < 8) {
-      setPasswordError('Le nouveau mot de passe doit contenir au moins 8 caractères.');
-      return;
-    }
     if (newPassword !== confirmPassword) {
       setPasswordError('Les deux mots de passe ne correspondent pas.');
       return;
@@ -199,6 +204,20 @@ export default function ParametresPage() {
     setPasswordError(null);
 
     const supabase = createClient();
+
+    // Supabase's updateUser does NOT verify the current password on its
+    // own -- it changes it for whoever holds the session, regardless of
+    // what's typed here. Without this explicit check first, the "Mot de
+    // passe actuel" field looks like a security check and isn't one.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: account?.email ?? '',
+      password: currentPassword,
+    });
+    if (verifyError) {
+      setPasswordError('Mot de passe actuel incorrect.');
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPassword });
 
     setCurrentPassword('');

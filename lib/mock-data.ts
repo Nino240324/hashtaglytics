@@ -4272,11 +4272,10 @@ export async function fetchAccountInfo(): Promise<AccountInfo> {
     return mockAccountInfo;
   }
   return {
-    // No real source for this yet -- Supabase Auth has no generic name
-    // field, and this isn't agencyName (a separate, already-real field
-    // on BrandInfo below). Left as the mock value pending a decision on
-    // where a personal name should actually live.
-    name: mockAccountInfo.name,
+    // From user_metadata (auth.users.raw_user_meta_data) -- currently
+    // null for most accounts, since this never actually saved before
+    // now.
+    name: (data.user.user_metadata?.full_name as string | undefined) ?? '',
     email: data.user.email ?? '',
   };
 }

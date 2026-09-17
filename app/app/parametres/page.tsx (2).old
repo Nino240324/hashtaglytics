@@ -18,6 +18,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import {
   fetchAccountInfo,
   fetchBrandInfo,
@@ -157,11 +158,34 @@ export default function ParametresPage() {
       setAccountError('Adresse e-mail invalide.');
       return;
     }
-    const result = await updateAccountInfo({ name: nameInput, email: emailInput });
-    setAccountMessage(result.message);
+
+    // Name has no real destination yet -- Supabase Auth has no generic
+    // name field, and this isn't the agency name (a separate field
+    // under Ma marque). Still a stub pending that decision.
+    const nameResult = await updateAccountInfo({ name: nameInput, email: emailInput });
+
+    const emailChanged = emailInput !== account?.email;
+    if (!emailChanged) {
+      setAccountMessage(nameResult.message);
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ email: emailInput });
+    if (error) {
+      setAccountError(error.message);
+      return;
+    }
+    // Not immediate -- Supabase sends a confirmation link to the NEW
+    // address, and the login e-mail only changes once it's clicked.
+    // Said explicitly here, or the user sees the old address after
+    // "saving" and assumes it failed.
+    setAccountMessage(
+      'Un e-mail de confirmation a été envoyé à la nouvelle adresse. Votre e-mail de connexion ne changera qu\u2019après avoir cliqué le lien qu\u2019il contient.',
+    );
   }
 
-  function handlePasswordSave(e: { preventDefault(): void }) {
+  async function handlePasswordSave(e: { preventDefault(): void }) {
     e.preventDefault();
     setPasswordMessage(null);
     if (newPassword.length < 8) {
@@ -173,10 +197,19 @@ export default function ParametresPage() {
       return;
     }
     setPasswordError(null);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    setPasswordMessage('Le changement de mot de passe n\u2019est pas encore câblé.');
+
+    if (error) {
+      setPasswordError(error.message);
+      return;
+    }
+    setPasswordMessage('Mot de passe modifié.');
   }
 
   async function handleLogoChange(e: { target: { files: FileList | null } }) {
@@ -238,17 +271,22 @@ export default function ParametresPage() {
       setBrandError('Adresse e-mail de contact invalide.');
       return;
     }
+    if (!isValidColour) {
+      setBrandError('Format attendu : #RRGGBB (6 chiffres hexadécimaux).');
+      return;
+    }
     const result = await updateBrandInfo({
       agencyName: agencyNameInput,
-      primaryColour: HEX_PATTERN.test(colourInput) ? colourInput : undefined,
+      primaryColour: colourInput,
       contactPhone: contactPhoneInput || null,
       contactEmail: contactEmailInput || null,
+      logoFile,
     });
-    setBrandMessage(
-      logoFile
-        ? `${result.message} Le logo choisi (${logoFile.name}) n\u2019a pas non plus été téléversé -- aperçu local uniquement.`
-        : result.message,
-    );
+    if (!result.ok) {
+      setBrandError(result.message);
+      return;
+    }
+    setBrandMessage(result.message);
   }
 
   if (account === null || brand === null) {
@@ -291,6 +329,10 @@ export default function ParametresPage() {
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                   />
+                  <p className="settings-hint">
+                    C&rsquo;est votre e-mail de connexion. Le changer envoie un lien de confirmation à
+                    la nouvelle adresse -- rien ne change avant que vous cliquiez sur ce lien.
+                  </p>
                 </div>
                 <button type="submit" className="btn btn-primary">
                   Enregistrer
@@ -427,6 +469,10 @@ export default function ParametresPage() {
                         value={contactEmailInput}
                         onChange={(e) => setContactEmailInput(e.target.value)}
                       />
+                      <p className="settings-hint">
+                        L&rsquo;adresse affichée sur vos documents clients -- différente de votre
+                        e-mail de connexion (Mon compte). Les deux ne sont pas liées.
+                      </p>
                     </div>
 
                     <button type="submit" className="btn btn-primary">
