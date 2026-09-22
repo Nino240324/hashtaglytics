@@ -20,6 +20,17 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // >>> onClose IS HELD IN A REF, NOT LISTED AS AN EFFECT DEPENDENCY. <
+  // Callers pass an inline function (a new one on every render). With
+  // onClose in the dependency list, every keystroke in a field re-ran the
+  // effect below: the cleanup restored focus, then dialogRef.focus() pulled
+  // it onto the dialog container -- so each letter typed kicked focus out
+  // of the input (2026-09-22). The effect must run on OPEN, not on render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -30,7 +41,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !dialogRef.current) return;
@@ -54,7 +65,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
