@@ -62,11 +62,35 @@ function outcomeToOptionValue(outcome: Prospect['outcome']): string {
   return match ? match.value : 'a_traiter';
 }
 
-function formatPhoneFR(e164: string | null): string {
-  if (!e164) return '—';
-  if (!e164.startsWith('+33')) return e164;
-  const national = `0${e164.slice(3)}`;
-  return national.replace(/(\d{2})(?=\d)/g, '$1 ');
+// >>> ONE FORMATTER FOR BOTH NUMBERS. <<< businesses.phone is E.164
+// (+33…); website_phone_raw is whatever the page printed (0189719737,
+// 01.89.71.97.37, +33 1 89…). The previous formatPhoneFR returned
+// anything not starting with +33 untouched, which is why the detail
+// panel displayed "0189719737" as one unreadable block.
+function formatPhoneAny(raw: string | null): string {
+  if (!raw) return '—';
+  const digits = raw.replace(/[^\d+]/g, '');
+  const national = digits.startsWith('+33')
+    ? `0${digits.slice(3)}`
+    : digits.startsWith('0033')
+      ? `0${digits.slice(4)}`
+      : digits;
+  // ONLY a ten-digit French number is regrouped. Anything else is shown
+  // exactly as it was found rather than reshaped into a number it isn't
+  // — a foreign or malformed number must look wrong, not tidy.
+  if (/^0\d{9}$/.test(national)) return national.replace(/(\d{2})(?=\d)/g, '$1 ');
+  return raw;
+}
+
+// The host alone, for showing WHERE a link goes before it is clicked —
+// "doctolib.fr" answers "is this his own page?" faster than the full URL.
+function hostOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
 }
 
 // Explicit locale + timeZone so server and client render the same string —
@@ -91,9 +115,9 @@ function renderStars(rating: number): string {
 // normal, not missing data), "—" only when never measured at all.
 // Never renders "42e -> 42e" -- that reads as a bug.
 function formatRankRange(p: Prospect): string {
-  if (p.best_rank === null) return '\u2014';
+  if (p.best_rank === null) return '—';
   if (p.rank_spread !== null && p.rank_spread > 0) {
-    return `${p.best_rank}e \u2192 ${p.worst_rank}e`;
+    return `${p.best_rank}e → ${p.worst_rank}e`;
   }
   return `${p.best_rank}e`;
 }
@@ -128,16 +152,77 @@ function buildFicheGoogleLink(p: Prospect): string | null {
 // the six historical, region-scoped campaigns nothing creates any more.
 function formatCityOrServiceArea(city: string | null, campaignCommune: string | null): string {
   if (city !== null) return city;
-  return campaignCommune ? `Zone desservie \u00b7 ${campaignCommune}` : 'Zone desservie';
+  return campaignCommune ? `Zone desservie · ${campaignCommune}` : 'Zone desservie';
 }
 
 const WEBSITE_KIND_LABELS: Record<Prospect['website_kind'], string> = {
   own: 'Site existant',
   none: 'Aucun',
-  booking_platform: 'Page qu\u2019il ne contrôle pas',
-  social: 'Page qu\u2019il ne contrôle pas',
-  directory: 'Page qu\u2019il ne contrôle pas',
+  booking_platform: 'Page qu’il ne contrôle pas',
+  social: 'Page qu’il ne contrôle pas',
+  directory: 'Page qu’il ne contrôle pas',
 };
+
+// >>> A NUMBER EXISTED AND THE COLUMN SAID "—". <<< The cell read
+// businesses.phone, the Google listing's number, and nothing else.
+// #19b-iv captures the number printed ON THE SITE into
+// website_phone_raw, and the detail panel was already displaying it — so
+// the table called a lead unreachable while the panel underneath printed
+// a working number (found 2026-09-23 on Coiffeur Visagiste,
+// 01 89 71 97 37).
+//
+// PROVENANCE IS PART OF THE VALUE. A number found on a page the prospect
+// does NOT control — Doctolib, an annuaire — may belong to that platform
+// rather than to him; call tracking is routine there. So the fallback
+// carries a label, and a different label when the page is not his. It is
+// never presented as his own number in silence.
+//
+// Measured 2026-09-23: 3 delivered leads have a number ONLY on their
+// page (2 own sites, 1 directory). Small today because #19b-iv claims
+// website_kind = 'own' only — a Doctolib page never gets its number read
+// at all, so the 'page tierce' case arises from leads reclassified after
+// capture.
+function PhoneCell({ p }: { p: Prospect }) {
+  if (p.phone !== null) {
+    return (
+      <>
+        {formatPhoneAny(p.phone)}
+        {hasPhoneMismatch(p) && (
+          <span
+            className="phone-mismatch-marker"
+            role="img"
+            aria-label="Le numéro affiché sur le site diffère de celui de la fiche Google"
+            title="Numéro différent sur le site"
+          >
+            {' '}
+            ⚠
+          </span>
+        )}
+      </>
+    );
+  }
+
+  if (p.website_phone_raw !== null) {
+    const ownSite = p.website_kind === 'own';
+    return (
+      <>
+        {formatPhoneAny(p.website_phone_raw)}{' '}
+        <span
+          className="badge badge-pending phone-source-badge"
+          title={
+            ownSite
+              ? 'Numéro trouvé sur le site du prospect — absent de sa fiche Google.'
+              : 'Numéro trouvé sur une page que le prospect ne contrôle pas : il peut appartenir à la plateforme et non à lui. À vérifier avant d’appeler.'
+          }
+        >
+          {ownSite ? 'site' : 'page tierce'}
+        </span>
+      </>
+    );
+  }
+
+  return <>{'—'}</>;
+}
 
 // Task 40f. Everything gathered for a lead, in four groups. Every
 // enrichment-dependent field uses ITS OWN correct marker — avis/note/
@@ -158,7 +243,7 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
         <dl>
           <div className="detail-field">
             <dt>Téléphone (fiche Google)</dt>
-            <dd className="mono-num">{formatPhoneFR(p.phone)}</dd>
+            <dd className="mono-num">{formatPhoneAny(p.phone)}</dd>
           </div>
           <div className="detail-field">
             <dt>Téléphone (site web)</dt>
@@ -167,7 +252,7 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
                 <span className="pending-cell">Pas encore traité</span>
               ) : (
                 <>
-                  {formatPhoneFR(p.website_phone_raw)}
+                  {formatPhoneAny(p.website_phone_raw)}
                   {hasPhoneMismatch(p) && <span className="phone-mismatch-marker"> ⚠ différent</span>}
                 </>
               )}
@@ -209,7 +294,7 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
                   Voir la fiche
                 </a>
               ) : (
-                '\u2014'
+                '—'
               )}
             </dd>
           </div>
@@ -226,7 +311,7 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
                   Reproduire la recherche
                 </a>
               ) : (
-                '\u2014'
+                '—'
               )}
             </dd>
           </div>
@@ -282,16 +367,31 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
         <dl>
           <div className="detail-field">
             <dt>Type</dt>
+            {/* >>> LINKED WHATEVER THE KIND. <<< A page the prospect does
+                not control is exactly the one worth opening: it is how
+                anyone decides whether the number printed on it belongs to
+                him or to the platform. Refusing to link it left that
+                question unanswerable from the screen. Measured
+                2026-09-23: 767 delivered leads carry such a URL (653
+                booking platforms, 64 annuaires, 50 réseaux sociaux) and
+                none of them was reachable from here. The host is shown
+                beside the label so it is clear where the link goes before
+                it is clicked. */}
             <dd>
-              {p.website_kind === 'own' && p.website !== null ? (
-                <a
-                  href={p.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'var(--navy)', textDecoration: 'underline' }}
-                >
-                  {WEBSITE_KIND_LABELS[p.website_kind]}
-                </a>
+              {p.website !== null ? (
+                <>
+                  <a
+                    href={p.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--navy)', textDecoration: 'underline' }}
+                  >
+                    {WEBSITE_KIND_LABELS[p.website_kind]}
+                  </a>
+                  {hostOf(p.website) && (
+                    <span className="mono-num website-host"> · {hostOf(p.website)}</span>
+                  )}
+                </>
               ) : (
                 WEBSITE_KIND_LABELS[p.website_kind]
               )}
@@ -408,7 +508,6 @@ function ProspectCard({
   pdfError: string | null;
 }) {
   const ficheState = getFicheGoogleState(p);
-  const phoneMismatch = hasPhoneMismatch(p);
 
   return (
     <div className={`prospect-card${isExpanded ? ' expanded' : ''}`}>
@@ -470,18 +569,7 @@ function ProspectCard({
 
         <div className="prospect-card-row prospect-card-bottom">
           <span className="mono-num">
-            {formatPhoneFR(p.phone)}
-            {phoneMismatch && (
-              <span
-                className="phone-mismatch-marker"
-                role="img"
-                aria-label="Le num\u00e9ro affich\u00e9 sur le site diff\u00e8re de celui de la fiche Google"
-                title="Num\u00e9ro diff\u00e9rent sur le site"
-              >
-                {' '}
-                ⚠
-              </span>
-            )}
+            <PhoneCell p={p} />
           </span>
           <select
             className="status-select"
@@ -620,7 +708,7 @@ function FiltresSheet({
             onClick={onClose}
             tabIndex={open ? 0 : -1}
           >
-            <span aria-hidden="true">{'\u2715'}</span>
+            <span aria-hidden="true">{'✕'}</span>
           </button>
         </div>
 
@@ -756,15 +844,17 @@ function FiltresSheet({
 
 const COLUMN_HELP = {
   position:
-    'Meilleur et pire classement mesurés dans cette campagne. L\u2019écart montre comment la visibilité change d\u2019une rue à l\u2019autre.',
+    'Meilleur et pire classement mesurés dans cette campagne. L’écart montre comment la visibilité change d’une rue à l’autre.',
   potentiel:
     'Part des points récupérables sur cette fiche. Plus le pourcentage est élevé, plus il y a de travail à vendre. Un prospect à 85 % a beaucoup à corriger ; un prospect à 20 % est déjà bien optimisé.',
   ficheGoogle:
-    'Non revendiquée signifie que personne n\u2019a confirmé auprès de Google être le propriétaire de l\u2019établissement. Le prospect ne peut pas répondre à ses avis, et des tiers peuvent modifier ses informations sans qu\u2019il en soit informé. Une colonne vide signifie que Google n\u2019a rien indiqué.',
+    'Non revendiquée signifie que personne n’a confirmé auprès de Google être le propriétaire de l’établissement. Le prospect ne peut pas répondre à ses avis, et des tiers peuvent modifier ses informations sans qu’il en soit informé. Une colonne vide signifie que Google n’a rien indiqué.',
   siteWeb:
     'Ne contrôle pas désigne une page que le prospect ne maîtrise pas : plateforme de réservation, réseau social ou annuaire. Il ne peut ni en changer le contenu ni en modifier la présentation.',
   email:
-    'Vérifié : adresse confirmée valide. Non garanti : l\u2019adresse existe mais sa validité n\u2019est pas confirmée — un envoi peut rebondir et affecter votre réputation d\u2019expéditeur. Aucune adresse : pas d\u2019adresse exploitable.',
+    'Vérifié : adresse confirmée valide. Non garanti : l’adresse existe mais sa validité n’est pas confirmée — un envoi peut rebondir et affecter votre réputation d’expéditeur. Aucune adresse : pas d’adresse exploitable.',
+  telephone:
+    'Le numéro de la fiche Google en priorité. À défaut, le numéro trouvé sur la page du prospect, signalé par une étiquette : « site » pour son propre site, « page tierce » pour une page qu’il ne contrôle pas — ce dernier peut appartenir à la plateforme plutôt qu’à lui.',
 } as const;
 
 // Keyboard- and touch-accessible by construction: a real <button>, not a
@@ -1040,7 +1130,7 @@ function ProspectsPageInner() {
       <div className="page-head">
         <h1>
           {campaignScope
-            ? `${campaignScope.keyword.charAt(0).toUpperCase()}${campaignScope.keyword.slice(1)} \u00b7 ${campaignScope.commune.nom}`
+            ? `${campaignScope.keyword.charAt(0).toUpperCase()}${campaignScope.keyword.slice(1)} · ${campaignScope.commune.nom}`
             : 'Prospects'}
         </h1>
       </div>
@@ -1269,7 +1359,14 @@ function ProspectsPageInner() {
                       <InfoTooltip text={COLUMN_HELP.email} />
                     </span>
                   </th>
-                  <th>Téléphone</th>
+                  <th>
+                    {/* The column can now show a number from two different
+                        sources, so it explains which, on demand. */}
+                    <span className="th-cluster">
+                      Téléphone
+                      <InfoTooltip text={COLUMN_HELP.telephone} />
+                    </span>
+                  </th>
                   <th>
                     <button type="button" onClick={() => toggleSort('measured_at')}>
                       Mesuré le {sortIndicator('measured_at')}
@@ -1288,7 +1385,6 @@ function ProspectsPageInner() {
                 {visibleRows.map((p) => {
                   const ficheState = getFicheGoogleState(p);
                   const emailState = getEmailCellState(p);
-                  const phoneMismatch = hasPhoneMismatch(p);
                   const isExpanded = expandedId === p.id;
                   return (
                     <Fragment key={p.id}>
@@ -1387,18 +1483,7 @@ function ProspectsPageInner() {
                         )}
                       </td>
                       <td className="mono-num">
-                        {formatPhoneFR(p.phone)}
-                        {phoneMismatch && (
-                          <span
-                            className="phone-mismatch-marker"
-                            role="img"
-                            aria-label="Le numéro affiché sur le site diffère de celui de la fiche Google"
-                            title="Numéro différent sur le site"
-                          >
-                            {' '}
-                            ⚠
-                          </span>
-                        )}
+                        <PhoneCell p={p} />
                       </td>
                       <td className="mono-num">{formatDateFR(p.measured_at)}</td>
                       <td className="mono-num">{formatDateFR(p.delivered_at)}</td>

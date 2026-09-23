@@ -888,11 +888,6 @@ function ProspectsPageInner() {
 
   async function handleRenderPdf(leadId: string, kind: 'client' | 'agency') {
     const key = `${leadId}-${kind}`;
-    // Opened synchronously, inside the click handler, before any
-    // await -- Safari and sometimes Chrome block window.open as a
-    // popup specifically when it's separated from the click by an
-    // await, which is exactly what awaiting the fetch first would do.
-    const tab = window.open('', '_blank');
     setPdfLoading((prev) => ({ ...prev, [key]: true }));
     setPdfError((prev) => ({ ...prev, [key]: null }));
 
@@ -901,14 +896,21 @@ function ProspectsPageInner() {
     setPdfLoading((prev) => ({ ...prev, [key]: false }));
     if (!result.ok) {
       setPdfError((prev) => ({ ...prev, [key]: result.message }));
-      if (tab) tab.close();
       return;
     }
-    if (tab) {
-      tab.location.href = result.url;
-    } else {
-      window.location.href = result.url;
-    }
+
+    // &download= on the URL sets Content-Disposition: attachment --
+    // this triggers a save, not a navigation, so no tab and no popup
+    // blocker to work around. The download attribute isn't set here:
+    // it's ignored cross-origin, and Supabase's own Content-Disposition
+    // header is what actually names the file
+    // (fiche-prospect-lba-92.pdf), not this attribute.
+    const a = document.createElement('a');
+    a.href = result.url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   const [keywords, setKeywords] = useState<string[]>([]);
