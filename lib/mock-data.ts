@@ -3571,10 +3571,25 @@ export function getFicheGoogleState(p: Prospect): FicheGoogleState {
 
 export type EmailCellState = 'pending' | 'has_email' | 'no_email';
 
+// >>> A MARKER THAT IS NEVER SET IS NOT "PENDING". <<< #19b fetches
+// website_kind = 'own' ONLY, so a lead with no own site keeps
+// email_checked_at null forever, and the old rule showed "Pas encore
+// traité" on it for good. Seen live 2026-09-23: every row on
+// Asnières-sur-Seine, four of six on Châtillon — all of them finished,
+// none of them ever going to be checked.
+//
+// Order matters: an address found before a nightly reclassification
+// moved the business to 'directory' is still a real address, so the
+// value is tested before the eligibility.
 export function getEmailCellState(p: Prospect): EmailCellState {
-  if (p.email_checked_at === null) return 'pending';
-  if (p.email === null) return 'no_email';
-  return 'has_email';
+  if (p.email !== null) return 'has_email';
+  // Checked, nothing found. apply_fetch_results sets email_checked_at
+  // even when the fetch failed, so a dead site lands here too.
+  if (p.email_checked_at !== null) return 'no_email';
+  // No own site: no pass will ever look. "Aucune adresse" is the honest
+  // answer — the agency has none and never will from us.
+  if (p.website_kind !== 'own') return 'no_email';
+  return 'pending';
 }
 
 // Only 'mismatch' is a finding worth a marker. 'no_website' means no
