@@ -4,30 +4,15 @@
 // whether to trust the product." Design points confirmed by Opus:
 //   - Campaigns are one commune by construction -- one progress bar per
 //     campaign is correct, not a simplification.
+//   - A town campaign is 40-150 grid points, ~3 minutes end to end
+//     (measured on Paris/Bordeaux/Lille). Poll every 3s; the poll itself
+//     is cheap (bounded by total_grids), never poll anything unbounded.
 //   - Only the scan stage has real granularity -- qualification,
-//     enrichment and delivery are COUNTS, not booleans.
-//
-// >>> 2026-09-22, #51e / KU-126: EVERY "done" NOW COMES FROM THE
-// DATABASE. <<< This file used to decide for itself, two ways, and both
-// were wrong:
-//
-//   1 · "the count did not change between two polls 3 seconds apart".
-//       MBI runs every 1-3 minutes, so any quiet moment read as
-//       finished. Seen live on coiffeur/Paris: Balayage, Qualification,
-//       Enrichissement and Livraison all ticked done at 796 leads --
-//       and more leads arrived afterwards.
-//
-//   2 · sitesAnalysed === sitesEligible, where eligible came from
-//       "b.website IS NOT NULL" -- Doctolib, Facebook and directory
-//       links included, none of which #19b ever fetches. Measured:
-//       ostéopathe 769 eligible against 164 real, coiffeur 169 against
-//       44. Those two numbers could never meet, so the screen never
-//       finished.
-//
-// campaign_status() answers both from the claim predicates of the
-// workers themselves -- "nothing left that any worker would pick up" --
-// so this screen cannot drift from the pipeline. prevProgressRef and the
-// StageDone type are gone with it.
+//     enrichment and delivery are COUNTS, not booleans (they're per-lead
+//     marker states -- see the comment on CampaignProgress in
+//     mock-data.ts). A stage is "done" when its count stops rising AND
+//     the stage below it has already finished -- detected by comparing
+//     consecutive polls, not a timing heuristic.
 
 'use client';
 
@@ -75,37 +60,58 @@ function formatPhoneFR(e164: string | null): string {
 // varied across grid points, "42e" alone when it didn't, "—" only when
 // never measured. Never renders "42e -> 42e", which would read as a bug.
 function formatRankRange(p: Prospect): string {
-  if (p.best_rank === null) return '—';
+  if (p.best_rank === null) return '\u2014';
   if (p.rank_spread !== null && p.rank_spread > 0) {
-    return `${p.best_rank}e → ${p.worst_rank}e`;
+    return `${p.best_rank}e \u2192 ${p.worst_rank}e`;
   }
   return `${p.best_rank}e`;
 }
 
 // Same logic as /app/prospects -- Google's own term for a listing with
 // no public shopfront is "zone desservie", not the invented "Zone
-// d'intervention".
+// d'intervention". campaign_commune comes from the row itself
+// (prospect_view), so this works the same way here as there.
 function formatCityOrServiceArea(p: Prospect): string {
   if (p.city !== null) return p.city;
-  return p.campaign_commune ? `Zone desservie · ${p.campaign_commune}` : 'Zone desservie';
+  return p.campaign_commune ? `Zone desservie \u00b7 ${p.campaign_commune}` : 'Zone desservie';
 }
 
 const POLL_INTERVAL_MS = 3000;
 
-// Anything other than in_progress is a resting state: the campaign has
-// finished, is waiting for a new quota period, or was stopped. Polling a
-// resting campaign every 3 seconds forever is pure waste.
-function isResting(status: Campaign['status']): boolean {
-  return status !== 'in_progress';
-}
+type StageDone = {
+  qualification: boolean;
+  enrichment: boolean;
+  delivery: boolean;
+  sitesAnalysed: boolean;
+  emailsVerified: boolean;
+};
+const NO_STAGES_DONE: StageDone = {
+  qualification: false,
+  enrichment: false,
+  delivery: false,
+  sitesAnalysed: false,
+  emailsVerified: false,
+};
 
 export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [progress, setProgress] = useState<CampaignProgress | null>(null);
+  const [stageDone, setStageDone] = useState<StageDone>(NO_STAGES_DONE);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Previous poll's counts -- "done" is detected by comparing consecutive
+  // polls (a count that stopped rising), not a poll-counter or timer.
+  const prevProgressRef = useRef<CampaignProgress | null>(null);
 
+  // Initial paint calls the same real fetchCampaignProgress the poll
+  // uses, rather than a simulated seed -- the real numbers are shown
+  // immediately, with no fake intermediate guess ever displayed. (An
+  // earlier version of this comment explained avoiding this function for
+  // the first paint because calling it would ADVANCE mock state -- that
+  // was true of the old mock-era implementation, not the real,
+  // read-only query this now is; calling it here doesn't mutate
+  // anything, so that concern no longer applies.)
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -120,6 +126,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       }
       setCampaign(c);
       setProgress(prog);
+      prevProgressRef.current = prog;
       setProspects(matching);
     });
     return () => {
@@ -127,27 +134,68 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
     };
   }, [campaignId]);
 
-  const restingNow = progress !== null && isResting(progress.stage.displayStatus);
-
+  // Polling starts only once the initial (non-mutating) state above has
+  // landed, and stops once delivery -- the final stage -- has stopped
+  // rising in turn.
   useEffect(() => {
-    if (campaign === null || restingNow) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
-    }
+    if (campaign === null) return;
 
     async function tick() {
       const next = await fetchCampaignProgress(campaignId);
       if (next === null) return;
+      const prev = prevProgressRef.current;
+
+      const scanDone = next.scanned >= next.total;
+      // A count stuck at exactly 0 across two polls also "stopped
+      // rising" -- without the > 0 check, a stage that never started at
+      // all reads identically to one that genuinely finished. Applies
+      // to these three, which have no fixed "eligible" denominator to
+      // compare against (unlike the two below).
+      const qualificationDone =
+        scanDone && next.leadsQualified > 0 && prev !== null && next.leadsQualified === prev.leadsQualified;
+      const enrichmentDone =
+        qualificationDone && next.leadsEnriched > 0 && prev !== null && next.leadsEnriched === prev.leadsEnriched;
+      const deliveryDone =
+        enrichmentDone && next.leadsDelivered > 0 && prev !== null && next.leadsDelivered === prev.leadsDelivered;
+      // Not "processed > 0 and stopped rising" -- not every delivered
+      // lead is eligible (website_kind 'none' never gets
+      // html_checked_at), so eligible may genuinely be 0, in which case
+      // the stage is correctly done immediately, not stalled. Done means
+      // every ELIGIBLE lead has been processed -- a definitive test
+      // against the true denominator, not a stability heuristic.
+      const sitesAnalysedDone = deliveryDone && next.sitesAnalysed === next.sitesEligible;
+      // Deliberately NOT evaluated at all until the site stage is done --
+      // emailsEligible depends on the site pass having found an address,
+      // so early on it's near-zero for a reason unrelated to how many
+      // addresses actually exist. Evaluating "0 = 0" before the site
+      // pass has run would tick this done before its own dependency has
+      // even started.
+      const emailsVerifiedDone = sitesAnalysedDone && next.emailsVerified === next.emailsEligible;
+
+      prevProgressRef.current = next;
       setProgress(next);
+      setStageDone({
+        qualification: qualificationDone,
+        enrichment: enrichmentDone,
+        delivery: deliveryDone,
+        sitesAnalysed: sitesAnalysedDone,
+        emailsVerified: emailsVerifiedDone,
+      });
+
       const matching = await fetchProspectsForCampaign(campaignId);
       setProspects(matching);
+    }
+
+    if (stageDone.emailsVerified) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      return;
     }
 
     intervalRef.current = setInterval(tick, POLL_INTERVAL_MS);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [campaign, campaignId, restingNow]);
+  }, [campaign, campaignId, stageDone.emailsVerified]);
 
   if (notFound) {
     return (
@@ -166,19 +214,40 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
     return <p className="loading-text">Chargement…</p>;
   }
 
-  const stage = progress.stage;
   const scanPct = progress.total > 0 ? Math.round((progress.scanned / progress.total) * 100) : 0;
+  const scanDone = progress.scanned >= progress.total;
   const phase1 = progress.scanned === 0;
 
-  // ONE source, shared with the campaign list. campaigns.status is not
-  // read here at all any more: it turns 'completed' the moment the scan
-  // finishes (complete_grid_point), with enrichment, delivery, site
-  // analysis and e-mail verification all still to run. failed, paused
-  // and quota_reached still surface -- campaign_status passes them
-  // through, deliberately, because those are real interruptions.
-  const displayStatusLabel = STATUS_LABELS[stage.displayStatus];
-  const allStagesDone = stage.displayStatus === 'completed';
+  // "Terminée" reflects all six stages, NOT campaigns.status -- that
+  // column turns 'completed' the moment the scan alone finishes
+  // (complete_grid_point), while enrichment/delivery/site-analysis/
+  // email-verification all still run afterwards. Read directly, before
+  // #19b and #24 ever ran, it would call a campaign finished while two
+  // of its six stages sat at zero. failed/paused/quota_reached are
+  // genuine, separate interruptions, not about stage completion at all,
+  // so those still come from campaigns.status directly.
+  //
+  // campaigns.status ITSELF is never written here -- enforce_max_campaigns
+  // counts it, and holding a campaign "active" until emails verify would
+  // block a free-tier agency from starting another for hours after their
+  // leads already arrived.
+  const allStagesDone =
+    scanDone &&
+    stageDone.qualification &&
+    stageDone.enrichment &&
+    stageDone.delivery &&
+    stageDone.sitesAnalysed &&
+    stageDone.emailsVerified;
+  const displayStatusLabel =
+    campaign.status === 'failed' || campaign.status === 'paused' || campaign.status === 'quota_reached'
+      ? STATUS_LABELS[campaign.status]
+      : allStagesDone
+        ? 'Terminée'
+        : 'En cours';
 
+  // leadsDelivered comes directly from the real query now (fetchCampaignProgress
+  // -- campaign_progress_view, one row per delivered lead) -- no separate
+  // client-side percentage guess or capping logic involved.
   const visibleProspects = prospects.slice(0, progress.leadsDelivered);
 
   return (
@@ -197,15 +266,6 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
           {campaign.commune.dept_code} · {campaign.commune.region_name}
         </span>
       </div>
-
-      {/* The quota is the one resting state an agency can act on, so it
-          says so instead of leaving five half-ticked stages unexplained. */}
-      {stage.displayStatus === 'quota_reached' && (
-        <p className="campaign-quota-note">
-          Votre quota de prospects est atteint. Les prospects restants de cette campagne vous seront
-          livrés dès l’ouverture de la prochaine période.
-        </p>
-      )}
 
       {phase1 ? (
         <div className="scan-pending">
@@ -254,54 +314,55 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
           </div>
 
           <div className="scan-stage-ticks">
-            <div className={`scan-tick ${stage.scanDone ? 'done' : 'active'}`}>
+            <div className="scan-tick done">
               <span className="scan-tick-icon" aria-hidden="true">
-                {stage.scanDone ? '✓' : '○'}
+                ✓
               </span>
               Balayage
             </div>
-            <div className={`scan-tick ${stage.qualificationDone ? 'done' : stage.scanDone ? 'active' : ''}`}>
+            <div className={`scan-tick ${stageDone.qualification ? 'done' : scanDone ? 'active' : ''}`}>
               <span className="scan-tick-icon" aria-hidden="true">
-                {stage.qualificationDone ? '✓' : '○'}
+                {stageDone.qualification ? '✓' : '○'}
               </span>
               Qualification <span className="mono-num scan-tick-count">{progress.leadsQualified}</span>
             </div>
             <div
-              className={`scan-tick ${stage.enrichmentDone ? 'done' : stage.qualificationDone ? 'active' : ''}`}
+              className={`scan-tick ${stageDone.enrichment ? 'done' : stageDone.qualification ? 'active' : ''}`}
             >
               <span className="scan-tick-icon" aria-hidden="true">
-                {stage.enrichmentDone ? '✓' : '○'}
+                {stageDone.enrichment ? '✓' : '○'}
               </span>
               Enrichissement <span className="mono-num scan-tick-count">{progress.leadsEnriched}</span>
             </div>
-            <div className={`scan-tick ${stage.deliveryDone ? 'done' : stage.enrichmentDone ? 'active' : ''}`}>
+            <div className={`scan-tick ${stageDone.delivery ? 'done' : stageDone.enrichment ? 'active' : ''}`}>
               <span className="scan-tick-icon" aria-hidden="true">
-                {stage.deliveryDone ? '✓' : '○'}
+                {stageDone.delivery ? '✓' : '○'}
               </span>
               Livraison <span className="mono-num scan-tick-count">{progress.leadsDelivered}</span>
             </div>
-            <div className={`scan-tick ${stage.sitesDone ? 'done' : stage.deliveryDone ? 'active' : ''}`}>
+            <div
+              className={`scan-tick ${stageDone.sitesAnalysed ? 'done' : stageDone.delivery ? 'active' : ''}`}
+            >
               <span className="scan-tick-icon" aria-hidden="true">
-                {stage.sitesDone ? '✓' : '○'}
+                {stageDone.sitesAnalysed ? '✓' : '○'}
               </span>
               Analyse du site{' '}
               <span className="mono-num scan-tick-count">
-                {/* Own sites only. A lead whose site never answered counts
-                    as analysed: nothing more will ever be fetched for it,
-                    and waiting would hold the campaign open forever. */}
                 {progress.sitesAnalysed}/{progress.sitesEligible}
               </span>
             </div>
-            <div className={`scan-tick ${stage.emailsDone ? 'done' : stage.sitesDone ? 'active' : ''}`}>
+            <div
+              className={`scan-tick ${stageDone.emailsVerified ? 'done' : stageDone.sitesAnalysed ? 'active' : ''}`}
+            >
               <span className="scan-tick-icon" aria-hidden="true">
-                {stage.emailsDone ? '✓' : '○'}
+                {stageDone.emailsVerified ? '✓' : '○'}
               </span>
               Vérification e-mail{' '}
               <span className="mono-num scan-tick-count">
-                {/* The eligible count only means something once the site
-                    pass has run -- the address comes FROM the site. A dash
-                    is honest; "0/0" would look like a finished count. */}
-                {stage.sitesDone ? `${progress.emailsVerified}/${progress.emailsEligible}` : '—'}
+                {/* emailsEligible isn't meaningful until the site pass has
+                    run -- a dash here is honest; "0/0" would look like a
+                    real, finished count rather than "not yet knowable". */}
+                {stageDone.sitesAnalysed ? `${progress.emailsVerified}/${progress.emailsEligible}` : '\u2014'}
               </span>
             </div>
           </div>
@@ -381,8 +442,8 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
                           <span
                             className="phone-mismatch-marker"
                             role="img"
-                            aria-label="Le numéro affiché sur le site diffère de celui de la fiche Google"
-                            title="Numéro différent sur le site"
+                            aria-label="Le num\u00e9ro affich\u00e9 sur le site diff\u00e8re de celui de la fiche Google"
+                            title="Num\u00e9ro diff\u00e9rent sur le site"
                           >
                             {' '}
                             ⚠

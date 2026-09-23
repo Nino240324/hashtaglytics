@@ -4610,32 +4610,64 @@ export async function fetchCampaign(id: string): Promise<Campaign | null> {
 // is gated against remaining quota, so a campaign may legitimately never
 // reach 100% enriched, and a boolean would sit false forever while a
 // count reads 150 / 400 and is honest about it.
+// One row of campaign_status(), the database function that is now the
+// SINGLE definition of where a campaign stands — used by this screen AND
+// by the campaign list, which used to read campaigns.status directly and
+// therefore said "Terminée" as soon as the scan finished, four stages
+// early.
+//
+// EVERY "done" BELOW COMES FROM THE DATABASE, not from watching a count.
+// The old client-side rule was "the count did not change between two
+// polls 3 seconds apart"; MBI runs every 1-3 minutes, so any quiet
+// moment read as finished. Seen live on coiffeur/Paris: all three stages
+// ticked done at 796 leads while delivery was still running.
+export type CampaignStageStatus = {
+  campaignId: string;
+  // campaigns.status as stored — kept for reference, never displayed.
+  rawStatus: Campaign['status'];
+  // What the badge shows, on BOTH screens.
+  displayStatus: Campaign['status'];
+  scanDone: boolean;
+  qualificationDone: boolean;
+  enrichmentDone: boolean;
+  deliveryDone: boolean;
+  sitesDone: boolean;
+  emailsDone: boolean;
+  // True when the quota is spent: nothing upstream moves until the
+  // period resets, so the remaining work is not "in progress".
+  quotaExhausted: boolean;
+};
+
 export type CampaignProgress = {
   total: number;
   scanned: number;
   inFlight: number;
   businesses: number; // observations (sum across grid points), NOT distinct businesses
-  // All three are the same number, always -- campaign_progress_view only
-  // contains delivered leads to begin with, so "qualified" and "enriched"
-  // here mean "delivered leads at that stage", not the real upstream
-  // funnel (which the browser is deliberately never shown -- see
-  // leads_own_delivered).
+
+  // All three are the same number, always — only delivered leads are
+  // visible to the browser. The real upstream funnel stays invisible on
+  // purpose (KU-107): an agency watching 1,125 become 192 sees
+  // three-quarters of something disappearing.
   leadsQualified: number;
   leadsEnriched: number;
-  leadsDelivered: number; // the one that puts leads on /app/prospects
-  sitesAnalysed: number; // html_checked_at
-  // The true denominator for the site stage -- not every delivered lead
-  // has a website at all (website_kind 'none' never gets
-  // html_checked_at). Done means sitesAnalysed === sitesEligible, not
-  // sitesAnalysed > 0.
+  leadsDelivered: number;
+
+  // website_kind = 'own' ONLY. The old denominator was "has any link at
+  // all", which counted Doctolib, Facebook and directory pages that
+  // #19b never claims — ostéopathe showed 769 eligible against 164 real,
+  // coiffeur 169 against 44, so the two numbers could never meet and the
+  // screen never finished.
   sitesEligible: number;
-  emailsVerified: number; // email_checked_at
-  // The true denominator for the email stage -- only leads where the
-  // SITE PASS found an address are eligible. This number is only
-  // meaningful once the site stage is done (email_eligible depends on
-  // that pass having run); read early, it's near-zero for a reason
-  // unrelated to how many addresses actually exist.
+  sitesAnalysed: number;
+
+  // Addresses actually sent to Bouncer. The old "verified" count was
+  // email_checked_at, which marks the website having been SEARCHED for
+  // an address, not an address having been verified — a different set of
+  // leads entirely.
   emailsEligible: number;
+  emailsVerified: number;
+
+  stage: CampaignStageStatus;
 };
 
 // A town campaign is 40-150 grid points and completes in ~3 minutes,
@@ -4685,136 +4717,102 @@ export function computeCampaignFunnel(
   return { leadsQualified, leadsEnriched, leadsDelivered };
 }
 
+// The campaign list needs every campaign's status in ONE call, so this
+// takes an optional id: omit it and the function returns the whole
+// agency's campaigns, keyed by id.
+//
+// The agency is NEVER passed — campaign_status resolves it from
+// auth.uid() through current_agency_ids(), the same boundary
+// create_campaign uses. It is SECURITY DEFINER because everything still
+// pending sits on UNDELIVERED leads, which leads_own_delivered hides
+// from the browser; it returns booleans and delivered-lead counts only.
+export async function fetchCampaignStatuses(
+  campaignId?: string,
+): Promise<Record<string, CampaignStageStatus & {
+  total: number; scanned: number; delivered: number;
+  sitesEligible: number; sitesAnalysed: number;
+  emailsEligible: number; emailsVerified: number;
+}>> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('campaign_status', {
+    p_campaign_id: campaignId ?? null,
+  });
+  if (error) {
+    console.error('fetchCampaignStatuses RPC failed', error);
+    return {};
+  }
+  const out: Record<string, any> = {};
+  for (const r of (data as any[]) ?? []) {
+    out[r.campaign_id] = {
+      campaignId: r.campaign_id,
+      rawStatus: r.raw_status,
+      displayStatus: r.display_status,
+      total: r.total_grids,
+      scanned: r.scanned_grids,
+      delivered: r.leads_delivered,
+      sitesEligible: r.sites_eligible,
+      sitesAnalysed: r.sites_analysed,
+      emailsEligible: r.emails_eligible,
+      emailsVerified: r.emails_verified,
+      scanDone: r.scan_done,
+      qualificationDone: r.qualification_done,
+      enrichmentDone: r.enrichment_done,
+      deliveryDone: r.delivery_done,
+      sitesDone: r.sites_done,
+      emailsDone: r.emails_done,
+      quotaExhausted: r.quota_exhausted,
+    };
+  }
+  return out;
+}
+
 export async function fetchCampaignProgress(id: string): Promise<CampaignProgress | null> {
   const supabase = createClient();
 
   // Bounded by this campaign's own total_grids (40-150 rows for a town
-  // campaign) -- never query business_grid_positions or anything
-  // unbounded here. This runs every 3 seconds; an unbounded query on a
-  // 3s poll is the mistake that would make the whole site struggle.
-  // Unchanged from before -- this half was already correct.
+  // campaign). This runs every 3 seconds; an unbounded query on a 3s
+  // poll is the mistake that would make the whole site struggle. Kept
+  // because businesses_found lives only here — campaign_status does not
+  // return it.
   const scanQuery = supabase
     .from('campaign_grids')
     .select('processed_at, status, businesses_found')
     .eq('campaign_id', id);
 
-  // campaign_progress_view, NOT prospect_view -- prospect_view's lateral
-  // computes best/worst rank across every grid point per row (what
-  // produces "13e -> 55e" on /app/prospects), which is wasted work here
-  // and exactly the mistake this function's own comment above already
-  // warns against on a poll this frequent.
-  //
-  // Every row in this view is already a delivered lead, so "qualified"
-  // and "enriched" below are really the same count as "delivered" --
-  // the real upstream funnel (how many were qualified/enriched BEFORE
-  // delivery) is deliberately invisible to the browser, restricted by
-  // leads_own_delivered. Querying leads directly for those numbers (the
-  // previous version of this function) returned exactly one number for
-  // both, by design, not a bug in the query itself.
-  const qualifiedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id);
-  const enrichedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('mbi_fetched_at', 'is', null);
-  const deliveredQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id);
-  const sitesAnalysedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('html_checked_at', 'is', null);
-  const sitesEligibleQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .eq('site_eligible', true);
-  const emailsVerifiedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('email_checked_at', 'is', null);
-  const emailsEligibleQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .eq('email_eligible', true);
-
-  const [
-    scanResult,
-    qualifiedResult,
-    enrichedResult,
-    deliveredResult,
-    sitesAnalysedResult,
-    sitesEligibleResult,
-    emailsVerifiedResult,
-    emailsEligibleResult,
-  ] = await Promise.all([
-    scanQuery,
-    qualifiedQuery,
-    enrichedQuery,
-    deliveredQuery,
-    sitesAnalysedQuery,
-    sitesEligibleQuery,
-    emailsVerifiedQuery,
-    emailsEligibleQuery,
-  ]);
+  const [scanResult, statuses] = await Promise.all([scanQuery, fetchCampaignStatuses(id)]);
 
   if (scanResult.error) {
     console.error('fetchCampaignProgress: campaign_grids query failed', scanResult.error);
   }
-  if (qualifiedResult.error) {
-    console.error('fetchCampaignProgress: qualified count failed', qualifiedResult.error);
-  }
-  if (enrichedResult.error) {
-    console.error('fetchCampaignProgress: enriched count failed', enrichedResult.error);
-  }
-  if (deliveredResult.error) {
-    console.error('fetchCampaignProgress: delivered count failed', deliveredResult.error);
-  }
-  if (sitesAnalysedResult.error) {
-    console.error('fetchCampaignProgress: sites-analysed count failed', sitesAnalysedResult.error);
-  }
-  if (sitesEligibleResult.error) {
-    console.error('fetchCampaignProgress: sites-eligible count failed', sitesEligibleResult.error);
-  }
-  if (emailsVerifiedResult.error) {
-    console.error('fetchCampaignProgress: emails-verified count failed', emailsVerifiedResult.error);
-  }
-  if (emailsEligibleResult.error) {
-    console.error('fetchCampaignProgress: emails-eligible count failed', emailsEligibleResult.error);
-  }
 
-  const gridRows = (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
+  const gridRows =
+    (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
   if (gridRows.length === 0) return null;
 
-  const total = gridRows.length;
-  // processed_at, NEVER status -- a row can carry status='completed'
-  // with processed_at still null. complete_grid_point is the only thing
-  // that sets processed_at, so a timestamp means it genuinely happened;
-  // counting by status would overstate progress on rows that never
-  // actually scanned.
+  const stage = statuses[id];
+  // No row means the campaign is not this agency's, or the RPC failed.
+  // Returning null shows "Campagne introuvable" rather than a screen of
+  // zeros that looks like a campaign which found nothing.
+  if (stage === undefined) return null;
+
+  // processed_at, NEVER status — a row can carry status='completed' with
+  // processed_at still null (KU-70). Same rule the database function
+  // uses, so the two can never disagree.
   const scanned = gridRows.filter((r) => r.processed_at !== null).length;
-  const inFlight = gridRows.filter((r) => r.status === 'in_progress').length;
-  const businesses = gridRows.reduce((sum, r) => sum + (r.businesses_found ?? 0), 0);
 
   return {
-    total,
+    total: gridRows.length,
     scanned,
-    inFlight,
-    businesses,
-    leadsQualified: qualifiedResult.count ?? 0,
-    leadsEnriched: enrichedResult.count ?? 0,
-    leadsDelivered: deliveredResult.count ?? 0,
-    sitesAnalysed: sitesAnalysedResult.count ?? 0,
-    sitesEligible: sitesEligibleResult.count ?? 0,
-    emailsVerified: emailsVerifiedResult.count ?? 0,
-    emailsEligible: emailsEligibleResult.count ?? 0,
+    inFlight: gridRows.filter((r) => r.status === 'in_progress').length,
+    businesses: gridRows.reduce((sum, r) => sum + (r.businesses_found ?? 0), 0),
+    leadsQualified: stage.delivered,
+    leadsEnriched: stage.delivered,
+    leadsDelivered: stage.delivered,
+    sitesEligible: stage.sitesEligible,
+    sitesAnalysed: stage.sitesAnalysed,
+    emailsEligible: stage.emailsEligible,
+    emailsVerified: stage.emailsVerified,
+    stage,
   };
 }
 
