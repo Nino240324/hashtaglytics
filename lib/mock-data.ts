@@ -4187,7 +4187,11 @@ export async function fetchAgencyPlanUsage(): Promise<AgencyPlanUsage> {
     // which is exactly what this diagnostic step is for.
     //
     // max_leads_per_month deliberately NOT selected here -- see below.
-    supabase.from('agencies').select('subscription_tiers(tier_name, max_active_campaigns)').single(),
+   // line ~4190
+    supabase
+    .from('agencies')
+    .select('custom_max_active_campaigns, subscription_tiers(tier_name, max_active_campaigns)')
+    .single(),
     supabase.from('campaigns').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
   ]);
 
@@ -4209,7 +4213,11 @@ export async function fetchAgencyPlanUsage(): Promise<AgencyPlanUsage> {
     // enforced live by a trigger, not snapshotted into a period, so the
     // tier's current value genuinely is the right source, unlike the
     // lead quota below.
-    maxActiveCampaigns: tier?.max_active_campaigns ?? null,
+    // line ~4212 — override first, tier as fallback, same as every other limit
+    maxActiveCampaigns:
+      (agencyResult.data as any)?.custom_max_active_campaigns
+      ?? tier?.max_active_campaigns
+      ?? null,
     activeCampaigns: campaignsResult.count ?? 0,
     leads_delivered_this_period: (quotaResult.data as any)?.leads_used ?? 0,
     // Bug fixed per Opus: this must come from lead_quota_periods.leads_quota,
@@ -4858,17 +4866,25 @@ export async function fetchProspectsForCampaign(id: string): Promise<Prospect[]>
 // looks like a working campaign (a campaign slot burnt with no
 // commune, or one that sits at 0/0 forever). The database function does
 // all four in one transaction.
+//
+// leadsTarget is the number the CUSTOMER asked for, and it is now a
+// LIMIT. Until 2026-09-25 create_campaign wrote the agency's entire
+// remaining monthly quota into campaigns.leads_target and delivery
+// ignored the column anyway -- which is how one campaign delivered 1796
+// leads and took a whole month's allowance.
 export async function createCampaign(input: {
   keyword: string;
   codeInsee: string;
+  leadsTarget: number;
 }): Promise<{ ok: true; campaignId: string; gridPoints: number } | { ok: false; message: string }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('create_campaign', {
     p_keyword: input.keyword,
     p_code_insee: input.codeInsee,
+    p_leads_target: input.leadsTarget,
   });
   if (error) {
-    // The two quota/limit errors are written to be shown verbatim to the
+    // The quota/limit errors are written to be shown verbatim to the
     // user (French, complete sentences) -- shown as-is rather than
     // replaced with a generic failure message. Anything else (unknown
     // commune, empty keyword) is developer-facing and shouldn't reach a

@@ -1,4 +1,14 @@
 // app/app/campagnes/page.tsx
+//
+// >>> 2026-09-22, #51e: THE BADGE NO LONGER READS campaigns.status. <<<
+// That column turns 'completed' the moment the last grid point is
+// scanned (complete_grid_point), while enrichment, delivery, site
+// analysis and e-mail verification all still run afterwards -- so this
+// list said "Terminée" while the campaign's own page said "En cours",
+// and the campaign page was the one telling the truth.
+//
+// Both screens now read campaign_status(), one database function, one
+// definition. One RPC call returns every campaign of the agency.
 
 'use client';
 
@@ -9,6 +19,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   createCampaign,
   fetchCampaignsOverview,
+  fetchCampaignStatuses,
   completionPct,
   type AgencyPlanUsage,
   type Campaign,
@@ -102,6 +113,11 @@ export default function CampagnesPage() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [planUsage, setPlanUsage] = useState<AgencyPlanUsage | null>(null);
+  // campaign id -> the status campaign_status() computed for it. A
+  // campaign missing from this map falls back to its own column, which
+  // is only wrong in the direction of saying "Terminée" too early --
+  // never of inventing a state.
+  const [displayStatuses, setDisplayStatuses] = useState<Record<string, Campaign['status']>>({});
   const [loading, setLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -112,9 +128,17 @@ export default function CampagnesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { campaigns, planUsage } = await fetchCampaignsOverview();
+    // One RPC for every campaign, alongside the list itself -- not one
+    // call per card.
+    const [{ campaigns, planUsage }, statuses] = await Promise.all([
+      fetchCampaignsOverview(),
+      fetchCampaignStatuses(),
+    ]);
     setCampaigns(campaigns);
     setPlanUsage(planUsage);
+    setDisplayStatuses(
+      Object.fromEntries(Object.values(statuses).map((s) => [s.campaignId, s.displayStatus])),
+    );
     setLoading(false);
   }, []);
 
@@ -125,9 +149,15 @@ export default function CampagnesPage() {
   // Change 1: this client-side check is a COURTESY, not the guarantee.
   // The real enforcement is a BEFORE INSERT trigger on campaigns that
   // takes an advisory lock on the agency id -- a second browser tab (or a
-  // stale one that's been sitting open) can always get there first. This
-  // disabled state exists so the form doesn't invite an attempt already
-  // known to fail, not because the client can be trusted to be right.
+  // stale one that's been sitting open) can always get there first.
+  //
+  // planUsage.activeCampaigns counts campaigns.status = 'in_progress',
+  // the same column enforce_max_campaigns counts -- NOT the label shown
+  // on the cards. A campaign whose scan is done but whose leads are
+  // still being enriched shows "En cours" here and does NOT hold a
+  // campaign slot, which is deliberate: holding the slot until e-mails
+  // verify would block a free-tier agency for hours after their leads
+  // arrived.
   const atCampaignLimit =
     planUsage !== null &&
     planUsage.maxActiveCampaigns !== null &&
@@ -191,9 +221,7 @@ export default function CampagnesPage() {
           {/* Second placement of the lead quota, beside the campaign
               counter specifically -- an agency with 3 leads left should
               see that before starting a campaign that will find 600
-              businesses. The global header (every screen) already shows
-              this; this is deliberately in addition to that, not instead
-              of it. */}
+              businesses. */}
           {planUsage && <LeadQuotaStat planUsage={planUsage} />}
         </div>
         {atCampaignLimit ? (
@@ -254,35 +282,36 @@ export default function CampagnesPage() {
         </div>
       ) : (
         <div className="campaign-card-grid">
-          {campaigns.map((c) => (
-            <Link key={c.id} href={`/app/campagnes/${c.id}`} className="campaign-card-link">
-              <div className="campaign-card">
-                <div className="campaign-card-top">
-                  <span className={statusBadgeClass(c.status)}>{STATUS_LABELS[c.status]}</span>
-                  <CampaignMenu />
+          {campaigns.map((c) => {
+            const status = displayStatuses[c.id] ?? c.status;
+            // The percentage is SCAN progress and nothing else, so it is
+            // shown only while the scan is unfinished. Printing "100%"
+            // beside "En cours" would suggest the campaign is done when
+            // what is actually running is enrichment and delivery --
+            // exactly the confusion this change exists to remove.
+            const scanIncomplete = c.completed_grids < c.total_grids;
+            return (
+              <Link key={c.id} href={`/app/campagnes/${c.id}`} className="campaign-card-link">
+                <div className="campaign-card">
+                  <div className="campaign-card-top">
+                    <span className={statusBadgeClass(status)}>{STATUS_LABELS[status]}</span>
+                    <CampaignMenu />
+                  </div>
+                  <div className="campaign-card-keyword">{c.keyword}</div>
+                  <div className="campaign-card-town">
+                    {c.commune.nom} <span className="mono-num">({c.commune.dept_code})</span>
+                  </div>
+                  <div className="campaign-card-stats">
+                    <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
+                    {scanIncomplete && (
+                      <span className="campaign-card-pct mono-num"> · {completionPct(c)}% balayé</span>
+                    )}
+                  </div>
+                  <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>
                 </div>
-                <div className="campaign-card-keyword">{c.keyword}</div>
-                <div className="campaign-card-town">
-                  {c.commune.nom} <span className="mono-num">({c.commune.dept_code})</span>
-                </div>
-                <div className="campaign-card-stats">
-                  <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
-                  {/* 'completed' shows no percentage -- 100% by definition.
-                      'in_progress', 'failed', and 'quota_reached' all
-                      stopped somewhere short of the end, and an agency
-                      can't tell 5% from 95% without a number. 'paused'
-                      isn't named in the spec either way and has no mock
-                      example to check against -- flagged, not guessed. */}
-                  {(c.status === 'in_progress' ||
-                    c.status === 'failed' ||
-                    c.status === 'quota_reached') && (
-                    <span className="campaign-card-pct mono-num"> · {completionPct(c)}%</span>
-                  )}
-                </div>
-                <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
 

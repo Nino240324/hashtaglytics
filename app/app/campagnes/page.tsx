@@ -1,14 +1,4 @@
 // app/app/campagnes/page.tsx
-//
-// >>> 2026-09-22, #51e: THE BADGE NO LONGER READS campaigns.status. <<<
-// That column turns 'completed' the moment the last grid point is
-// scanned (complete_grid_point), while enrichment, delivery, site
-// analysis and e-mail verification all still run afterwards -- so this
-// list said "Terminée" while the campaign's own page said "En cours",
-// and the campaign page was the one telling the truth.
-//
-// Both screens now read campaign_status(), one database function, one
-// definition. One RPC call returns every campaign of the agency.
 
 'use client';
 
@@ -19,7 +9,6 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   createCampaign,
   fetchCampaignsOverview,
-  fetchCampaignStatuses,
   completionPct,
   type AgencyPlanUsage,
   type Campaign,
@@ -113,32 +102,23 @@ export default function CampagnesPage() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [planUsage, setPlanUsage] = useState<AgencyPlanUsage | null>(null);
-  // campaign id -> the status campaign_status() computed for it. A
-  // campaign missing from this map falls back to its own column, which
-  // is only wrong in the direction of saying "Terminée" too early --
-  // never of inventing a state.
-  const [displayStatuses, setDisplayStatuses] = useState<Record<string, Campaign['status']>>({});
   const [loading, setLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [keywordInput, setKeywordInput] = useState('');
   const [selectedCommune, setSelectedCommune] = useState<Commune | null>(null);
+  // [NEW] Held as a STRING, not a number. A number state forces a value
+  // into an empty field (0 or NaN), so the user cannot clear it to retype
+  // and the field can never legitimately be blank. Parsed on submit.
+  const [leadsInput, setLeadsInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    // One RPC for every campaign, alongside the list itself -- not one
-    // call per card.
-    const [{ campaigns, planUsage }, statuses] = await Promise.all([
-      fetchCampaignsOverview(),
-      fetchCampaignStatuses(),
-    ]);
+    const { campaigns, planUsage } = await fetchCampaignsOverview();
     setCampaigns(campaigns);
     setPlanUsage(planUsage);
-    setDisplayStatuses(
-      Object.fromEntries(Object.values(statuses).map((s) => [s.campaignId, s.displayStatus])),
-    );
     setLoading(false);
   }, []);
 
@@ -149,26 +129,54 @@ export default function CampagnesPage() {
   // Change 1: this client-side check is a COURTESY, not the guarantee.
   // The real enforcement is a BEFORE INSERT trigger on campaigns that
   // takes an advisory lock on the agency id -- a second browser tab (or a
-  // stale one that's been sitting open) can always get there first.
-  //
-  // planUsage.activeCampaigns counts campaigns.status = 'in_progress',
-  // the same column enforce_max_campaigns counts -- NOT the label shown
-  // on the cards. A campaign whose scan is done but whose leads are
-  // still being enriched shows "En cours" here and does NOT hold a
-  // campaign slot, which is deliberate: holding the slot until e-mails
-  // verify would block a free-tier agency for hours after their leads
-  // arrived.
+  // stale one that's been sitting open) can always get there first. This
+  // disabled state exists so the form doesn't invite an attempt already
+  // known to fail, not because the client can be trusted to be right.
   const atCampaignLimit =
     planUsage !== null &&
     planUsage.maxActiveCampaigns !== null &&
     planUsage.activeCampaigns >= planUsage.maxActiveCampaigns;
 
-  const canSubmit = !submitting && keywordInput.trim() !== '' && selectedCommune !== null;
+  // [NEW] What is left of this period's quota. null means unlimited (an
+  // enterprise agreement), NOT zero -- the two must not be conflated or
+  // an enterprise agency is locked out of its own form.
+  //
+  // THIS IS A COURTESY TOO. create_campaign re-reads lead_quota_periods
+  // and raises its own French sentence if the number is wrong; this only
+  // saves the round trip and gives the user the ceiling before they type.
+  // A stale tab will always be able to get it wrong.
+  const remainingQuota: number | null =
+    planUsage === null || planUsage.max_leads_per_month === null
+      ? null
+      : Math.max(planUsage.max_leads_per_month - planUsage.leads_delivered_this_period, 0);
+
+  // [NEW] Parsed once, used by both the validity check and the submit.
+  // Number('') is 0 and Number('abc') is NaN, so both are rejected by the
+  // >= 1 test below without a separate branch.
+  const leadsTarget = Number(leadsInput.trim());
+  const leadsTargetValid =
+    Number.isInteger(leadsTarget) &&
+    leadsTarget >= 1 &&
+    (remainingQuota === null || leadsTarget <= remainingQuota);
+
+  // [NEW] The inline message. Deliberately NOT shown while the field is
+  // empty: an error on a field nobody has touched yet reads as a failure
+  // rather than an instruction.
+  const leadsError =
+    leadsInput.trim() === '' || leadsTargetValid
+      ? null
+      : remainingQuota !== null && leadsTarget > remainingQuota
+        ? `Il ne vous reste que ${remainingQuota} prospects pour cette période.`
+        : 'Indiquez un nombre entier de prospects, au minimum 1.';
+
+  const canSubmit =
+    !submitting && keywordInput.trim() !== '' && selectedCommune !== null && leadsTargetValid;
 
   function closeModal() {
     setModalOpen(false);
     setKeywordInput('');
     setSelectedCommune(null);
+    setLeadsInput('');            // [NEW]
     setConfirmation(null);
   }
 
@@ -181,6 +189,7 @@ export default function CampagnesPage() {
       const result = await createCampaign({
         keyword: keywordInput.trim().toLowerCase(),
         codeInsee: selectedCommune.code_insee,
+        leadsTarget,                // [NEW]
       });
       if (result.ok) {
         // That's the screen the whole flow exists for -- no need to show
@@ -189,7 +198,7 @@ export default function CampagnesPage() {
         router.push(`/app/campagnes/${result.campaignId}`);
         return;
       }
-      // Shown verbatim -- the two quota/limit messages are written in
+      // Shown verbatim -- the quota/limit messages are written in
       // complete, user-facing French sentences specifically to be
       // displayed as-is, not replaced with a generic failure message.
       setConfirmation(result.message);
@@ -221,7 +230,9 @@ export default function CampagnesPage() {
           {/* Second placement of the lead quota, beside the campaign
               counter specifically -- an agency with 3 leads left should
               see that before starting a campaign that will find 600
-              businesses. */}
+              businesses. The global header (every screen) already shows
+              this; this is deliberately in addition to that, not instead
+              of it. */}
           {planUsage && <LeadQuotaStat planUsage={planUsage} />}
         </div>
         {atCampaignLimit ? (
@@ -282,36 +293,35 @@ export default function CampagnesPage() {
         </div>
       ) : (
         <div className="campaign-card-grid">
-          {campaigns.map((c) => {
-            const status = displayStatuses[c.id] ?? c.status;
-            // The percentage is SCAN progress and nothing else, so it is
-            // shown only while the scan is unfinished. Printing "100%"
-            // beside "En cours" would suggest the campaign is done when
-            // what is actually running is enrichment and delivery --
-            // exactly the confusion this change exists to remove.
-            const scanIncomplete = c.completed_grids < c.total_grids;
-            return (
-              <Link key={c.id} href={`/app/campagnes/${c.id}`} className="campaign-card-link">
-                <div className="campaign-card">
-                  <div className="campaign-card-top">
-                    <span className={statusBadgeClass(status)}>{STATUS_LABELS[status]}</span>
-                    <CampaignMenu />
-                  </div>
-                  <div className="campaign-card-keyword">{c.keyword}</div>
-                  <div className="campaign-card-town">
-                    {c.commune.nom} <span className="mono-num">({c.commune.dept_code})</span>
-                  </div>
-                  <div className="campaign-card-stats">
-                    <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
-                    {scanIncomplete && (
-                      <span className="campaign-card-pct mono-num"> · {completionPct(c)}% balayé</span>
-                    )}
-                  </div>
-                  <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>
+          {campaigns.map((c) => (
+            <Link key={c.id} href={`/app/campagnes/${c.id}`} className="campaign-card-link">
+              <div className="campaign-card">
+                <div className="campaign-card-top">
+                  <span className={statusBadgeClass(c.status)}>{STATUS_LABELS[c.status]}</span>
+                  <CampaignMenu />
                 </div>
-              </Link>
-            );
-          })}
+                <div className="campaign-card-keyword">{c.keyword}</div>
+                <div className="campaign-card-town">
+                  {c.commune.nom} <span className="mono-num">({c.commune.dept_code})</span>
+                </div>
+                <div className="campaign-card-stats">
+                  <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
+                  {/* 'completed' shows no percentage -- 100% by definition.
+                      'in_progress', 'failed', and 'quota_reached' all
+                      stopped somewhere short of the end, and an agency
+                      can't tell 5% from 95% without a number. 'paused'
+                      isn't named in the spec either way and has no mock
+                      example to check against -- flagged, not guessed. */}
+                  {(c.status === 'in_progress' ||
+                    c.status === 'failed' ||
+                    c.status === 'quota_reached') && (
+                    <span className="campaign-card-pct mono-num"> · {completionPct(c)}%</span>
+                  )}
+                </div>
+                <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
 
@@ -338,6 +348,55 @@ export default function CampagnesPage() {
               placeholder="ex. Lille"
               disabled={submitting}
             />
+          </div>
+
+          {/* [NEW] THE ORDER. Until this existed, create_campaign wrote
+              the agency's ENTIRE remaining monthly quota into
+              campaigns.leads_target and delivery ignored it anyway --
+              which is how one campaign delivered 1796 leads and took a
+              whole month's allowance.
+
+              type="number" rather than text: it brings up the numeric
+              keypad on mobile, which matters more than the desktop
+              spinner. onWheel blurs because a number input silently
+              changes value when the page is scrolled with the cursor
+              over it -- a real data-entry hazard, not a nicety.
+
+              min/max are set for the browser's own validation and for
+              assistive tech, but they are NOT the guarantee: the field
+              is a courtesy and create_campaign re-checks both bounds
+              against the live quota. */}
+          <div className="filter-group">
+            <label htmlFor="new-leads-target">Nombre de prospects</label>
+            <input
+              id="new-leads-target"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={remainingQuota ?? undefined}
+              step={1}
+              placeholder={remainingQuota === null ? 'ex. 50' : `1 à ${remainingQuota}`}
+              value={leadsInput}
+              onChange={(e) => setLeadsInput(e.target.value)}
+              onWheel={(e) => e.currentTarget.blur()}
+              disabled={submitting}
+              aria-invalid={leadsError !== null}
+              aria-describedby={leadsError !== null ? 'new-leads-target-error' : 'new-leads-target-hint'}
+            />
+            {leadsError === null ? (
+              <p className="settings-hint" id="new-leads-target-hint">
+                {remainingQuota === null
+                  ? 'Combien de prospects voulez-vous pour cette campagne ?'
+                  : `Il vous reste ${remainingQuota} prospects pour cette période.`}
+              </p>
+            ) : (
+              /* role="alert" so a screen reader announces the correction
+                 as it is typed, rather than the user discovering it only
+                 when the submit button refuses to work. */
+              <p className="settings-error-note" id="new-leads-target-error" role="alert">
+                {leadsError}
+              </p>
+            )}
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
