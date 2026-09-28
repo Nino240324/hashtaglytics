@@ -4644,12 +4644,20 @@ export async function fetchCampaign(id: string): Promise<Campaign | null> {
 // polls 3 seconds apart"; MBI runs every 1-3 minutes, so any quiet
 // moment read as finished. Seen live on coiffeur/Paris: all three stages
 // ticked done at 796 leads while delivery was still running.
+// campaigns.status holds five values (campaigns_status_check). The BADGE
+// has six: campaign_status computes 'exhausted' for a campaign that
+// finished without filling its order. It is COMPUTED TEXT, never stored,
+// so widening Campaign['status'] instead would make that type lie about
+// what the column can hold -- and mapCampaignRow assigns row.status
+// straight into it.
+export type DisplayStatus = Campaign['status'] | 'exhausted';
+
 export type CampaignStageStatus = {
   campaignId: string;
   // campaigns.status as stored — kept for reference, never displayed.
   rawStatus: Campaign['status'];
-  // What the badge shows, on BOTH screens.
-  displayStatus: Campaign['status'];
+  // What the badge shows. Six values, not five — see DisplayStatus above.
+  displayStatus: DisplayStatus;
   scanDone: boolean;
   qualificationDone: boolean;
   enrichmentDone: boolean;

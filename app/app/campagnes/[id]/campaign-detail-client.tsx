@@ -42,15 +42,20 @@ import {
   hasPhoneMismatch,
   type Campaign,
   type CampaignProgress,
+  type DisplayStatus,
   type Prospect,
 } from '@/lib/mock-data';
 
-const STATUS_LABELS: Record<Campaign['status'], string> = {
+// SIX values, not five. campaigns.status has five (campaigns_status_check);
+// campaign_status computes a sixth, 'exhausted', for a campaign that
+// finished without filling its order -- see DisplayStatus in mock-data.ts.
+const STATUS_LABELS: Record<DisplayStatus, string> = {
   in_progress: 'En cours',
   completed: 'Terminée',
   failed: 'Échouée',
   paused: 'En pause',
   quota_reached: 'Quota atteint',
+  exhausted: 'Terminée · plus de prospects qualifiables',
 };
 
 const OUTCOME_LABELS: Record<NonNullable<Prospect['outcome']>, string> = {
@@ -159,7 +164,7 @@ const POLL_INTERVAL_MS = 3000;
 // Anything other than in_progress is a resting state: the campaign has
 // finished, is waiting for a new quota period, or was stopped. Polling a
 // resting campaign every 3 seconds forever is pure waste.
-function isResting(status: Campaign['status']): boolean {
+function isResting(status: DisplayStatus): boolean {
   return status !== 'in_progress';
 }
 
@@ -241,7 +246,13 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   // and quota_reached still surface -- campaign_status passes them
   // through, deliberately, because those are real interruptions.
   const displayStatusLabel = STATUS_LABELS[stage.displayStatus];
-  const allStagesDone = stage.displayStatus === 'completed';
+  // 'exhausted' IS DONE. The order was not filled, but every grid is
+  // scanned and nothing is pending at any stage -- there is no further
+  // work. Leaving the tick off would invite a support ticket on a
+  // campaign with nothing wrong with it, so it ticks like a completed
+  // one and the note below says why the count is short.
+  const allStagesDone =
+    stage.displayStatus === 'completed' || stage.displayStatus === 'exhausted';
 
   const visibleProspects = prospects.slice(0, progress.leadsDelivered);
 
@@ -268,6 +279,17 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
         <p className="campaign-quota-note">
           Votre quota de prospects est atteint. Les prospects restants de cette campagne vous seront
           livrés dès l’ouverture de la prochaine période.
+        </p>
+      )}
+
+      {/* The order finished short. Says what WE did, never what the town
+          contains: the opportunity tier is scale-dependent (KU-145 --
+          Colmar, 1 high of 39 businesses; Paris, 421 of 1274), so
+          "qualifiable" is load-bearing, not padding. */}
+      {stage.displayStatus === 'exhausted' && (
+        <p className="campaign-quota-note">
+          Nous avons balayé toute la zone. Aucun autre professionnel qualifiable ne répond à vos
+          critères.
         </p>
       )}
 

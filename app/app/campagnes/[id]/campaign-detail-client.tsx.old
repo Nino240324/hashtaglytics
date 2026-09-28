@@ -64,11 +64,75 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function formatPhoneFR(e164: string | null): string {
-  if (!e164) return '—';
-  if (!e164.startsWith('+33')) return e164;
-  const national = `0${e164.slice(3)}`;
-  return national.replace(/(\d{2})(?=\d)/g, '$1 ');
+// businesses.phone is E.164 (+33…); website_phone_raw is whatever the
+// page printed. One formatter for both -- the old one returned anything
+// not starting with +33 untouched, so a website number rendered as one
+// unreadable block of ten digits.
+function formatPhoneAny(raw: string | null): string {
+  if (!raw) return '—';
+  const digits = raw.replace(/[^\d+]/g, '');
+  const national = digits.startsWith('+33')
+    ? `0${digits.slice(3)}`
+    : digits.startsWith('0033')
+      ? `0${digits.slice(4)}`
+      : digits;
+  // ONLY a ten-digit French number is regrouped. Anything else is shown
+  // as found rather than reshaped into a number it isn't.
+  if (/^0\d{9}$/.test(national)) return national.replace(/(\d{2})(?=\d)/g, '$1 ');
+  return raw;
+}
+
+// >>> A NUMBER EXISTED AND THE CELL SAID "—". <<< This column read
+// businesses.phone, the Google listing's number, and nothing else --
+// while #19b-iv had already captured the number printed ON THE SITE into
+// website_phone_raw. Found 2026-09-23 on a coiffeur whose listing had no
+// phone at all and whose page carried 01 89 71 97 37.
+//
+// PROVENANCE IS PART OF THE VALUE. A number on a page the prospect does
+// NOT control -- Doctolib, an annuaire -- may belong to that platform,
+// not to him. The fallback is therefore labelled, and labelled
+// differently when the page is not his; it is never passed off as his
+// own number in silence.
+function PhoneCell({ p }: { p: Prospect }) {
+  if (p.phone !== null) {
+    return (
+      <>
+        {formatPhoneAny(p.phone)}
+        {hasPhoneMismatch(p) && (
+          <span
+            className="phone-mismatch-marker"
+            role="img"
+            aria-label="Le numéro affiché sur le site diffère de celui de la fiche Google"
+            title="Numéro différent sur le site"
+          >
+            {' '}
+            ⚠
+          </span>
+        )}
+      </>
+    );
+  }
+
+  if (p.website_phone_raw !== null) {
+    const ownSite = p.website_kind === 'own';
+    return (
+      <>
+        {formatPhoneAny(p.website_phone_raw)}{' '}
+        <span
+          className="badge badge-pending phone-source-badge"
+          title={
+            ownSite
+              ? 'Numéro trouvé sur le site du prospect — absent de sa fiche Google.'
+              : 'Numéro trouvé sur une page que le prospect ne contrôle pas : il peut appartenir à la plateforme et non à lui. À vérifier avant d’appeler.'
+          }
+        >
+          {ownSite ? 'site' : 'page tierce'}
+        </span>
+      </>
+    );
+  }
+
+  return <>{'—'}</>;
 }
 
 // Same logic as /app/prospects -- "13e -> 55e" when the business's rank
@@ -376,18 +440,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
                         )}
                       </td>
                       <td className="mono-num" data-label="Téléphone">
-                        {formatPhoneFR(p.phone)}
-                        {hasPhoneMismatch(p) && (
-                          <span
-                            className="phone-mismatch-marker"
-                            role="img"
-                            aria-label="Le numéro affiché sur le site diffère de celui de la fiche Google"
-                            title="Numéro différent sur le site"
-                          >
-                            {' '}
-                            ⚠
-                          </span>
-                        )}
+                        <PhoneCell p={p} />
                       </td>
                       <td data-label="Statut">
                         {p.outcome === null ? (
