@@ -168,12 +168,48 @@ function isResting(status: DisplayStatus): boolean {
   return status !== 'in_progress';
 }
 
+// >>> THE ONLY THREE COUNTERS THAT CAN CHANGE A VISIBLE CELL. <<<
+// [#51e 2026-09-30]
+//
+// The poll below used to refetch EVERY delivered prospect every 3
+// seconds for as long as the campaign read 'in_progress' -- and since
+// #51e that lasts until the e-mail stage ticks, not until the scan
+// finishes. Measured on plombier/Paris 2026-09-30: all 50 leads were
+// delivered at t+7m53s and the campaign only stopped reading
+// 'in_progress' at t+24m, so the table was refetched ~320 times after
+// the customer already had everything in it.
+//
+// It is not one cheap query either. fetchProspectsForCampaign reads
+// prospect_view, whose LATERAL computes best/worst rank across every
+// grid point PER ROW -- the exact cost campaign_progress_view was
+// created to avoid, and which fetchCampaignProgress's own comment calls
+// "the unbounded-poll mistake". A Growth campaign is 400 rows.
+//
+// A delivered lead's row can only change in three ways, and each one
+// moves one of these counters:
+//   leadsDelivered  a new row appears
+//   sitesAnalysed   #19b writes title / h1 / meta / phone on a row
+//   emailsVerified  #24 writes email_status on a row
+// If none of the three moved, nothing in the table changed, so the
+// fetch is skipped. The counters come from campaign_status(), which the
+// poll is already calling -- this costs nothing extra.
+//
+// NOT a count-only guard on leadsDelivered: the site and e-mail passes
+// change FIELDS on rows that already exist, so watching the row count
+// alone would freeze the e-mail column at "Pas encore traité" for good.
+function countsKey(p: CampaignProgress): string {
+  return `${p.leadsDelivered}|${p.sitesAnalysed}|${p.emailsVerified}`;
+}
+
 export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [progress, setProgress] = useState<CampaignProgress | null>(null);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // The counter triple the prospect list currently reflects. A ref, not
+  // state: changing it must never itself cause a render.
+  const lastCountsRef = useRef<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +226,9 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       setCampaign(c);
       setProgress(prog);
       setProspects(matching);
+      // Seeded here so the FIRST tick doesn't refetch a list that was
+      // just fetched three seconds ago.
+      lastCountsRef.current = countsKey(prog);
     });
     return () => {
       cancelled = true;
@@ -204,16 +243,44 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       return;
     }
 
+    // `stopped` guards BOTH awaits. Without it a reply that lands after
+    // the user has left the page still calls setState, and two slow
+    // replies can land out of order and put an older list back on screen.
+    let stopped = false;
+
     async function tick() {
       const next = await fetchCampaignProgress(campaignId);
-      if (next === null) return;
+      if (stopped || next === null) return;
       setProgress(next);
+
+      // The cheap counters said nothing moved, so no row in the table
+      // can have changed. See countsKey above.
+      const key = countsKey(next);
+      if (key === lastCountsRef.current) return;
+
       const matching = await fetchProspectsForCampaign(campaignId);
+      if (stopped) return;
+
+      // >>> DO NOT LET A FAILED FETCH BECOME PERMANENT. <<<
+      // fetchProspectsForCampaign logs and returns [] on error, so an
+      // error is indistinguishable from an empty result by shape alone.
+      // It IS distinguishable by count: this fetch runs AFTER the one
+      // that produced `next`, so it can only ever return MORE rows than
+      // leadsDelivered, never fewer. Fewer means the fetch failed or
+      // came back stale -- so leave the list and the key alone and let
+      // the next tick retry, instead of blanking the table and then
+      // never refetching it because the key now matches.
+      // 0 < 0 is false, so a campaign with nothing delivered yet still
+      // commits normally.
+      if (matching.length < next.leadsDelivered) return;
+
+      lastCountsRef.current = key;
       setProspects(matching);
     }
 
     intervalRef.current = setInterval(tick, POLL_INTERVAL_MS);
     return () => {
+      stopped = true;
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [campaign, campaignId, restingNow]);
