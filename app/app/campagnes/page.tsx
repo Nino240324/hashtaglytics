@@ -236,6 +236,23 @@ export default function CampagnesPage() {
         leadsTarget,                // [NEW]
       });
       if (result.ok) {
+        // [#69 PHASE C] RÉVEILLE #17a TOUT DE SUITE au lieu d'attendre son
+        // tic de la seconde :00. Mesuré 2026-10-02 sur électricien/Reims :
+        // 56 secondes perdues entre la création et la réclamation du premier
+        // point, uniquement parce que la campagne est née à :04.
+        //
+        // keepalive: true EST OBLIGATOIRE ICI. Le router.push juste en
+        // dessous fait naviguer la page, et sans keepalive le navigateur
+        // annule une requête en vol pendant une navigation — on perdrait le
+        // réveil exactement quand il sert.
+        //
+        // void + catch vide : c'est volontairement sans attente et sans
+        // conséquence. Si le réveil échoue, la planification de #17a prend
+        // le relais dans la minute. Jamais faire échouer une création de
+        // campagne réussie à cause d'un signal d'optimisation.
+        void fetch('/api/campaign-kickoff', { method: 'POST', keepalive: true })
+          .catch(() => {});
+
         // That's the screen the whole flow exists for -- no need to show
         // a confirmation message first, since the user lands directly on
         // the new campaign's own progress screen.

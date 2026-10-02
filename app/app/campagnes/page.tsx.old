@@ -9,27 +9,51 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   createCampaign,
   fetchCampaignsOverview,
+  fetchCampaignStatuses,
   completionPct,
   type AgencyPlanUsage,
   type Campaign,
+  type CampaignStageStatus,
   type Commune,
+  type DisplayStatus,
 } from '@/lib/mock-data';
 import { CommuneAutocomplete } from '../_components/commune-autocomplete';
 import { Modal } from '../_components/modal';
 import { LeadQuotaStat } from '../_components/lead-quota-stat';
 
-const STATUS_LABELS: Record<Campaign['status'], string> = {
+// SIX values, not five -- the same table the detail screen uses, kept
+// identical on purpose. campaigns.status has five (campaigns_status_check);
+// campaign_status() computes a sixth, 'exhausted', for a campaign that
+// finished without filling its order.
+//
+// >>> THIS SCREEN NO LONGER READS campaigns.status. <<< [#55c 2026-09-30]
+// It read the stored column until today, which is why a campaign said
+// "Terminée" the moment the SCAN finished -- four stages before the
+// customer had anything. campaign_status() has been the single
+// definition of where a campaign stands since #51e; the detail page was
+// wired to it on 2026-09-28 and the list was not, so the two screens
+// disagreed about the same campaign. They now read the same row.
+const STATUS_LABELS: Record<DisplayStatus, string> = {
   in_progress: 'En cours',
   completed: 'Terminée',
   failed: 'Échouée',
   paused: 'En pause',
   quota_reached: 'Quota atteint',
+  exhausted: 'Terminée · plus de prospects qualifiables',
 };
 
-function statusBadgeClass(status: Campaign['status']): string {
+// 'exhausted' is graded with quota_reached, NOT with completed: the work
+// finished but the order did not fill, and a green tick on a campaign
+// that delivered 7 of 10 would read as success. It is not 'failed'
+// either -- nothing went wrong, the market simply ran out of businesses
+// WE can qualify (KU-145: the tier is scale-dependent, so this never
+// means "no more plumbers exist in this town").
+function statusBadgeClass(status: DisplayStatus): string {
   if (status === 'completed') return 'badge badge-ok';
   if (status === 'failed') return 'badge badge-opportunity';
-  if (status === 'quota_reached' || status === 'paused') return 'badge badge-pending';
+  if (status === 'quota_reached' || status === 'paused' || status === 'exhausted') {
+    return 'badge badge-pending';
+  }
   return 'badge badge-neutral'; // in_progress
 }
 
@@ -102,6 +126,10 @@ export default function CampagnesPage() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [planUsage, setPlanUsage] = useState<AgencyPlanUsage | null>(null);
+  // [#55c] Keyed by campaign id. fetchCampaignStatuses() already took an
+  // optional id and already returned EVERY campaign keyed by id -- it was
+  // built for this list on 2026-09-28 and never wired up here.
+  const [statuses, setStatuses] = useState<Record<string, CampaignStageStatus>>({});
   const [loading, setLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -114,17 +142,33 @@ export default function CampagnesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
 
+  // ONE round trip for both, not two sequential ones -- campaign_status()
+  // is a single RPC over the agency's own campaigns and does not depend
+  // on the overview query's result.
   const load = useCallback(async () => {
     setLoading(true);
-    const { campaigns, planUsage } = await fetchCampaignsOverview();
+    const [{ campaigns, planUsage }, statusMap] = await Promise.all([
+      fetchCampaignsOverview(),
+      fetchCampaignStatuses(),
+    ]);
     setCampaigns(campaigns);
     setPlanUsage(planUsage);
+    setStatuses(statusMap);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // >>> THE FALLBACK IS THE OLD BEHAVIOUR, ON PURPOSE. <<< If the RPC
+  // fails it returns {} (it logs and does not throw), and every card
+  // falls back to the stored column -- the same slightly-early "Terminée"
+  // this screen showed before today. That is wrong but familiar; a blank
+  // badge, or a card that refuses to render, would be worse.
+  function displayStatusOf(c: Campaign): DisplayStatus {
+    return statuses[c.id]?.displayStatus ?? c.status;
+  }
 
   // Change 1: this client-side check is a COURTESY, not the guarantee.
   // The real enforcement is a BEFORE INSERT trigger on campaigns that
@@ -293,11 +337,15 @@ export default function CampagnesPage() {
         </div>
       ) : (
         <div className="campaign-card-grid">
-          {campaigns.map((c) => (
+          {campaigns.map((c) => {
+            const displayStatus = displayStatusOf(c);
+            return (
             <Link key={c.id} href={`/app/campagnes/${c.id}`} className="campaign-card-link">
               <div className="campaign-card">
                 <div className="campaign-card-top">
-                  <span className={statusBadgeClass(c.status)}>{STATUS_LABELS[c.status]}</span>
+                  <span className={statusBadgeClass(displayStatus)}>
+                    {STATUS_LABELS[displayStatus]}
+                  </span>
                   <CampaignMenu />
                 </div>
                 <div className="campaign-card-keyword">{c.keyword}</div>
@@ -307,21 +355,30 @@ export default function CampagnesPage() {
                 <div className="campaign-card-stats">
                   <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
                   {/* 'completed' shows no percentage -- 100% by definition.
+                      'exhausted' shows none either, and that is MEASURED,
+                      not assumed: campaign_status only reaches 'exhausted'
+                      behind d_deliver, which is behind scan_done, so every
+                      grid is scanned and this would always print 100%.
                       'in_progress', 'failed', and 'quota_reached' all
                       stopped somewhere short of the end, and an agency
                       can't tell 5% from 95% without a number. 'paused'
                       isn't named in the spec either way and has no mock
-                      example to check against -- flagged, not guessed. */}
-                  {(c.status === 'in_progress' ||
-                    c.status === 'failed' ||
-                    c.status === 'quota_reached') && (
+                      example to check against -- flagged, not guessed.
+
+                      NOTE the percentage is the SCAN, not the order.
+                      A campaign can read 100% here and still be 'in
+                      progress' -- that is KU-126 / #51e, not this. */}
+                  {(displayStatus === 'in_progress' ||
+                    displayStatus === 'failed' ||
+                    displayStatus === 'quota_reached') && (
                     <span className="campaign-card-pct mono-num"> · {completionPct(c)}%</span>
                   )}
                 </div>
                 <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 
