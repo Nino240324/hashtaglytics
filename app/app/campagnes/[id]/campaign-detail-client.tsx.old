@@ -207,7 +207,6 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   const [progress, setProgress] = useState<CampaignProgress | null>(null);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const restingStreak = useRef(0);                      // [NEW 2026-10-04]
   // The counter triple the prospect list currently reflects. A ref, not
   // state: changing it must never itself cause a render.
   const lastCountsRef = useRef<string>('');
@@ -236,14 +235,13 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
     };
   }, [campaignId]);
 
+  const restingNow = progress !== null && isResting(progress.stage.displayStatus);
+
   useEffect(() => {
-    if (campaign === null) {
+    if (campaign === null || restingNow) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
-
-    // A fresh campaign starts the streak over.
-    restingStreak.current = 0;
 
     // `stopped` guards BOTH awaits. Without it a reply that lands after
     // the user has left the page still calls setState, and two slow
@@ -254,31 +252,6 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       const next = await fetchCampaignProgress(campaignId);
       if (stopped || next === null) return;
       setProgress(next);
-
-      // >>> TWO CONSECUTIVE READS BEFORE WE BELIEVE IT. <<< [2026-10-04]
-      // displayStatus is COMPUTED, never stored, and can flip back.
-      // campaign_status reads f_scan and the pend_* counts in one query,
-      // but they become true at different instants: qualify_batch commits
-      // AFTER the last processed_at. Measured on Dijon 2026-10-04, a
-      // 190 ms window where the scan was complete and no leads existed
-      // yet resolved to 'exhausted'.
-      //
-      // This used to live in the effect's guard, so ONE unlucky tick
-      // cleared the interval -- and restingNow could only recompute from
-      // a poll that no longer ran. "Aucun autre professionnel qualifiable"
-      // froze on screen until the customer reloaded, while ten prospects
-      // were sixty seconds away. One extra poll closes the whole class.
-      //
-      // >>> IT MUST SIT ABOVE THE countsKey EARLY RETURN. <<< A resting
-      // campaign's counters stop moving, so below it the streak would
-      // never reach 2 and the page would poll forever.
-      restingStreak.current = isResting(next.stage.displayStatus)
-        ? restingStreak.current + 1
-        : 0;
-      if (restingStreak.current >= 2 && intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
 
       // The cheap counters said nothing moved, so no row in the table
       // can have changed. See countsKey above.
@@ -310,7 +283,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
       stopped = true;
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [campaign, campaignId]);
+  }, [campaign, campaignId, restingNow]);
 
   if (notFound) {
     return (
