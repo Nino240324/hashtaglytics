@@ -88,6 +88,11 @@ export type Prospect = {
   // below, which is the grid point where it ranked best, not the
   // business itself.
   place_id: string | null;
+    // Sibling Google Business Profiles of the SAME COMPANY, keyed by
+  // place_id. Written by deliver_leads at the moment of sale, matched on
+  // phone OR normalised name. null = never computed (delivered before this
+  // shipped); {} = computed, none found. Those are different claims.
+  gbp_siblings: Record<string, { name: string; match_on: 'phone' | 'name' }> | null;
   review_count: number | null;
   rating: number | null; // NULL on older scans -- no stars then
   photo_count: number | null;
@@ -184,7 +189,7 @@ export type Campaign = {
   completed_at: string | null;
 };
 
-export const mockProspects: Prospect[] = [
+const mockProspectsRaw: Omit<Prospect, 'gbp_siblings'>[] = [
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000001",
     "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
@@ -3514,7 +3519,24 @@ export const mockCampaigns: Campaign[] = [
     "completed_at": null
   }
 ];
-
+// [D-1 Phase B 2026-10-05] gbp_siblings is REQUIRED on Prospect (not
+// optional — `undefined` would skip the `=== null` branch and then
+// Object.keys(undefined) throws), and the 40 rows above predate it, exactly
+// like every lead delivered before the column shipped. Rather than add the
+// key forty times, it is attached here — with one row of each of the three
+// states, so all three UI branches are visible without a live delivery:
+//   row 0   a sibling matched on phone — the FME-ENERGIES case
+//   row 1   {}    computed, none found  -> renders "Non"
+//   rest    null  never computed        -> renders "Pas encore traité"
+export const mockProspects: Prospect[] = mockProspectsRaw.map((p, i): Prospect => ({
+  ...p,
+  gbp_siblings:
+    i === 0
+      ? { ChIJmockSibling000000000: { name: 'FME-ENERGIES', match_on: 'phone' } }
+      : i === 1
+        ? {}
+        : null,
+}));
 // -- Status tabs (unchanged from the v1 prospects build) ---------------
 
 export type ProspectStatusTab =

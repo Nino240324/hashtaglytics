@@ -135,9 +135,15 @@ function buildMapsLink(p: Prospect): string | null {
 // The business's OWN Google listing -- photos, reviews, hours, claimed
 // status. What an agency opens before dialling. Distinct from
 // buildMapsLink above, which reproduces the grid-point search instead.
+// Split out so a sibling listing — which has a place_id but no Prospect
+// row of its own — can be linked with the same URL shape. [D-1 Phase B]
+function googlePlaceUrl(placeId: string): string {
+  return `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+}
+
 function buildFicheGoogleLink(p: Prospect): string | null {
   if (p.place_id === null) return null;
-  return `https://www.google.com/maps/place/?q=place_id:${p.place_id}`;
+  return googlePlaceUrl(p.place_id);
 }
 
 // Google's own term for a listing with no public shopfront (roughly 40%
@@ -358,6 +364,52 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
           <div className="detail-field">
             <dt>Photos</dt>
             <dd className="mono-num">{p.photo_count !== null ? p.photo_count : '—'}</dd>
+          </div>
+                    {/* >>> PLUSIEURS FICHES GBP. <<< [D-1 Phase B 2026-10-05]
+              One company can hold several Google Business Profiles — nine
+              phone numbers in the database carry two or more listings. The
+              agency sees them and decides; we assert nothing beyond "these
+              share a number" or "these share a name".
+
+              THREE STATES, AND THE FIRST IS NOT "NON". null means the lead
+              was delivered before this shipped and nothing has ever looked,
+              so it reads "Pas encore traité" like every other ungated
+              field. An empty object means we looked and found none — that
+              is the only thing allowed to say "Non". Collapsing the two
+              would claim a company has one listing when nobody checked. */}
+          <div className="detail-field">
+            <dt>Plusieurs fiches GBP</dt>
+            <dd>
+              {p.gbp_siblings === null ? (
+                <span className="pending-cell">Pas encore traité</span>
+              ) : Object.keys(p.gbp_siblings).length === 0 ? (
+                'Non'
+              ) : (
+                Object.entries(p.gbp_siblings).map(([placeId, sib], i) => (
+                  <Fragment key={placeId}>
+                    {i > 0 && ' · '}
+                    <a
+                      href={googlePlaceUrl(placeId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--navy)', textDecoration: 'underline' }}
+                    >
+                      {sib.name}
+                    </a>{' '}
+                    <span
+                      className="badge badge-pending"
+                      title={
+                        sib.match_on === 'phone'
+                          ? 'Même numéro de téléphone que cette fiche.'
+                          : 'Même nom d’entreprise que cette fiche, après normalisation. Peut être un établissement distinct — à vérifier.'
+                      }
+                    >
+                      {sib.match_on === 'phone' ? 'même numéro' : 'même nom'}
+                    </span>
+                  </Fragment>
+                ))
+              )}
+            </dd>
           </div>
         </dl>
       </div>
