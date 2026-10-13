@@ -131,19 +131,15 @@ function formatRankRange(p: Prospect): string {
 //
 // Until D1 (prospect_view, 2026-10-13) the grid lateral had no LF-
 // filter, so a business the grid never saw borrowed the Local Finder
-// rank and this cell printed it as a Maps rank -- "4e" for a business
-// that appeared at none of the points scanned. D1 made best_rank NULL
-// on exactly those rows (points_seen = 0), which is why the branch
-// below exists: without it they now read "—", which is honest but
-// throws away the one thing we do know about them.
+// rank and this cell printed it as a Maps rank. D1 made best_rank NULL
+// on exactly those rows, which is why the branch below exists: without
+// it they read "—", which is honest but throws away the one thing we
+// know about them.
 //
-// >>> NO DENOMINATOR ON THE FINDER RANK. <<< Deliberate, and it is not
-// an omission to be fixed later from what we already store: the pass
-// writes observations for buckets A and B only (v4 S4 step 6,
-// `if (bucket === 'C') continue;`), while finder_rank is the position
-// in the WHOLE list, bucket C included. Counting our own rows would
-// print "60e sur 24". A real denominator has to be captured on the LF-
-// row at scan time.
+// >>> NO DENOMINATOR ON THE FINDER RANK. <<< The pass writes
+// observations for buckets A and B only (v4 S4 step 6), while
+// finder_rank is the position in the WHOLE list. Counting our own rows
+// would print "60e sur 24".
 function RankCell({ p }: { p: Prospect }) {
   if (p.best_rank !== null) return <>{formatRankRange(p)}</>;
 
@@ -163,11 +159,9 @@ function RankCell({ p }: { p: Prospect }) {
 
   // Neither a grid position nor a finder rank. Rare and pre-existing:
   // a lead whose only observations sit at a point flagged as anomalous
-  // AFTER it was delivered. One such lead on 2026-10-13. "—" is the
-  // honest answer -- there is no measurement to show.
+  // AFTER it was delivered. One such lead on 2026-10-13.
   return <>{'—'}</>;
 }
-
 // Reproduces the exact search that produced best_rank -- the grid
 // point's own coordinates, NEVER the business's own. A service-area
 // listing carries a city placeholder (every Paris SAB business sits at
@@ -181,9 +175,15 @@ function buildMapsLink(p: Prospect): string | null {
 // The business's OWN Google listing -- photos, reviews, hours, claimed
 // status. What an agency opens before dialling. Distinct from
 // buildMapsLink above, which reproduces the grid-point search instead.
+// Split out so a sibling listing — which has a place_id but no Prospect
+// row of its own — can be linked with the same URL shape. [D-1 Phase B]
+function googlePlaceUrl(placeId: string): string {
+  return `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+}
+
 function buildFicheGoogleLink(p: Prospect): string | null {
   if (p.place_id === null) return null;
-  return `https://www.google.com/maps/place/?q=place_id:${p.place_id}`;
+  return googlePlaceUrl(p.place_id);
 }
 
 // Google's own term for a listing with no public shopfront (roughly 40%
@@ -405,6 +405,52 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
             <dt>Photos</dt>
             <dd className="mono-num">{p.photo_count !== null ? p.photo_count : '—'}</dd>
           </div>
+                    {/* >>> PLUSIEURS FICHES GBP. <<< [D-1 Phase B 2026-10-05]
+              One company can hold several Google Business Profiles — nine
+              phone numbers in the database carry two or more listings. The
+              agency sees them and decides; we assert nothing beyond "these
+              share a number" or "these share a name".
+
+              THREE STATES, AND THE FIRST IS NOT "NON". null means the lead
+              was delivered before this shipped and nothing has ever looked,
+              so it reads "Pas encore traité" like every other ungated
+              field. An empty object means we looked and found none — that
+              is the only thing allowed to say "Non". Collapsing the two
+              would claim a company has one listing when nobody checked. */}
+          <div className="detail-field">
+            <dt>Plusieurs fiches GBP</dt>
+            <dd>
+              {p.gbp_siblings === null ? (
+                <span className="pending-cell">Pas encore traité</span>
+              ) : Object.keys(p.gbp_siblings).length === 0 ? (
+                'Non'
+              ) : (
+                Object.entries(p.gbp_siblings).map(([placeId, sib], i) => (
+                  <Fragment key={placeId}>
+                    {i > 0 && ' · '}
+                    <a
+                      href={googlePlaceUrl(placeId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--navy)', textDecoration: 'underline' }}
+                    >
+                      {sib.name}
+                    </a>{' '}
+                    <span
+                      className="badge badge-pending"
+                      title={
+                        sib.match_on === 'phone'
+                          ? 'Même numéro de téléphone que cette fiche.'
+                          : 'Même nom d’entreprise que cette fiche, après normalisation. Peut être un établissement distinct — à vérifier.'
+                      }
+                    >
+                      {sib.match_on === 'phone' ? 'même numéro' : 'même nom'}
+                    </span>
+                  </Fragment>
+                ))
+              )}
+            </dd>
+          </div>
         </dl>
       </div>
 
@@ -585,8 +631,7 @@ function ProspectCard({
 
         <div className="prospect-card-row">
           <span className="prospect-card-position">
-            Position <RankCell p={p} />
-          </span>
+          Position <RankCell p={p} /></span>
           {p.rating !== null ? (
             <span>
               <span className="stars-row">{renderStars(p.rating)}</span>{' '}
@@ -891,7 +936,7 @@ function FiltresSheet({
 }
 
 const COLUMN_HELP = {
-  position:
+    position:
     'Meilleur et pire classement mesurés dans cette campagne. L’écart montre comment la visibilité change d’une rue à l’autre. ' +
     'La mention « recherche élargie » signale une entreprise qui n’est apparue à aucun point balayé : elle a été trouvée par une recherche sur l’ensemble de la commune, et le classement affiché est celui de cette recherche.',
   potentiel:

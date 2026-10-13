@@ -122,6 +122,52 @@ function formatRankRange(p: Prospect): string {
   return `${p.best_rank}e`;
 }
 
+// >>> TWO INSTRUMENTS, NEVER ONE NUMBER. <<< [D2, 2026-10-13]
+// best_rank is the Google Maps rank measured FROM A GRID POINT inside
+// the commune. finder_rank is the position in Google's Local Finder
+// list for the commune as a whole -- a different index answering a
+// different question. Printing them in the same shape says something
+// false about where the business was seen.
+//
+// Until D1 (prospect_view, 2026-10-13) the grid lateral had no LF-
+// filter, so a business the grid never saw borrowed the Local Finder
+// rank and this cell printed it as a Maps rank -- "4e" for a business
+// that appeared at none of the points scanned. D1 made best_rank NULL
+// on exactly those rows (points_seen = 0), which is why the branch
+// below exists: without it they now read "—", which is honest but
+// throws away the one thing we do know about them.
+//
+// >>> NO DENOMINATOR ON THE FINDER RANK. <<< Deliberate, and it is not
+// an omission to be fixed later from what we already store: the pass
+// writes observations for buckets A and B only (v4 S4 step 6,
+// `if (bucket === 'C') continue;`), while finder_rank is the position
+// in the WHOLE list, bucket C included. Counting our own rows would
+// print "60e sur 24". A real denominator has to be captured on the LF-
+// row at scan time.
+function RankCell({ p }: { p: Prospect }) {
+  if (p.best_rank !== null) return <>{formatRankRange(p)}</>;
+
+  if (p.finder_rank !== null) {
+    return (
+      <>
+        <span className="mono-num">{p.finder_rank}e</span>{' '}
+        <span
+          className="badge badge-pending"
+          title="Classement dans la recherche élargie sur la commune. Cette entreprise n’est apparue à aucun des points balayés : le chiffre vient d’une autre recherche Google, pas de la grille."
+        >
+          recherche élargie
+        </span>
+      </>
+    );
+  }
+
+  // Neither a grid position nor a finder rank. Rare and pre-existing:
+  // a lead whose only observations sit at a point flagged as anomalous
+  // AFTER it was delivered. One such lead on 2026-10-13. "—" is the
+  // honest answer -- there is no measurement to show.
+  return <>{'—'}</>;
+}
+
 // Reproduces the exact search that produced best_rank -- the grid
 // point's own coordinates, NEVER the business's own. A service-area
 // listing carries a city placeholder (every Paris SAB business sits at
@@ -135,15 +181,9 @@ function buildMapsLink(p: Prospect): string | null {
 // The business's OWN Google listing -- photos, reviews, hours, claimed
 // status. What an agency opens before dialling. Distinct from
 // buildMapsLink above, which reproduces the grid-point search instead.
-// Split out so a sibling listing — which has a place_id but no Prospect
-// row of its own — can be linked with the same URL shape. [D-1 Phase B]
-function googlePlaceUrl(placeId: string): string {
-  return `https://www.google.com/maps/place/?q=place_id:${placeId}`;
-}
-
 function buildFicheGoogleLink(p: Prospect): string | null {
   if (p.place_id === null) return null;
-  return googlePlaceUrl(p.place_id);
+  return `https://www.google.com/maps/place/?q=place_id:${p.place_id}`;
 }
 
 // Google's own term for a listing with no public shopfront (roughly 40%
@@ -365,52 +405,6 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
             <dt>Photos</dt>
             <dd className="mono-num">{p.photo_count !== null ? p.photo_count : '—'}</dd>
           </div>
-                    {/* >>> PLUSIEURS FICHES GBP. <<< [D-1 Phase B 2026-10-05]
-              One company can hold several Google Business Profiles — nine
-              phone numbers in the database carry two or more listings. The
-              agency sees them and decides; we assert nothing beyond "these
-              share a number" or "these share a name".
-
-              THREE STATES, AND THE FIRST IS NOT "NON". null means the lead
-              was delivered before this shipped and nothing has ever looked,
-              so it reads "Pas encore traité" like every other ungated
-              field. An empty object means we looked and found none — that
-              is the only thing allowed to say "Non". Collapsing the two
-              would claim a company has one listing when nobody checked. */}
-          <div className="detail-field">
-            <dt>Plusieurs fiches GBP</dt>
-            <dd>
-              {p.gbp_siblings === null ? (
-                <span className="pending-cell">Pas encore traité</span>
-              ) : Object.keys(p.gbp_siblings).length === 0 ? (
-                'Non'
-              ) : (
-                Object.entries(p.gbp_siblings).map(([placeId, sib], i) => (
-                  <Fragment key={placeId}>
-                    {i > 0 && ' · '}
-                    <a
-                      href={googlePlaceUrl(placeId)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: 'var(--navy)', textDecoration: 'underline' }}
-                    >
-                      {sib.name}
-                    </a>{' '}
-                    <span
-                      className="badge badge-pending"
-                      title={
-                        sib.match_on === 'phone'
-                          ? 'Même numéro de téléphone que cette fiche.'
-                          : 'Même nom d’entreprise que cette fiche, après normalisation. Peut être un établissement distinct — à vérifier.'
-                      }
-                    >
-                      {sib.match_on === 'phone' ? 'même numéro' : 'même nom'}
-                    </span>
-                  </Fragment>
-                ))
-              )}
-            </dd>
-          </div>
         </dl>
       </div>
 
@@ -510,7 +504,9 @@ function LeadDetailPanel({ p }: { p: Prospect }) {
         <dl>
           <div className="detail-field">
             <dt>Position</dt>
-            <dd className="mono-num">{formatRankRange(p)}</dd>
+            <dd className="mono-num">
+              <RankCell p={p} />
+            </dd>
           </div>
           <div className="detail-field">
             <dt>Potentiel</dt>
@@ -589,7 +585,7 @@ function ProspectCard({
 
         <div className="prospect-card-row">
           <span className="prospect-card-position">
-            Position <span className="mono-num">{formatRankRange(p)}</span>
+            Position <RankCell p={p} />
           </span>
           {p.rating !== null ? (
             <span>
@@ -896,7 +892,8 @@ function FiltresSheet({
 
 const COLUMN_HELP = {
   position:
-    'Meilleur et pire classement mesurés dans cette campagne. L’écart montre comment la visibilité change d’une rue à l’autre.',
+    'Meilleur et pire classement mesurés dans cette campagne. L’écart montre comment la visibilité change d’une rue à l’autre. ' +
+    'La mention « recherche élargie » signale une entreprise qui n’est apparue à aucun point balayé : elle a été trouvée par une recherche sur l’ensemble de la commune, et le classement affiché est celui de cette recherche.',
   potentiel:
     'Part des points récupérables sur cette fiche. Plus le pourcentage est élevé, plus il y a de travail à vendre. Un prospect à 85 % a beaucoup à corriger ; un prospect à 20 % est déjà bien optimisé.',
   ficheGoogle:
@@ -1462,7 +1459,9 @@ function ProspectsPageInner() {
                         <div className="loc">{formatCityOrServiceArea(p.city, p.campaign_commune)}</div>
                       </td>
                       <td>{p.keyword}</td>
-                      <td className="mono-num">{formatRankRange(p)}</td>
+                      <td className="mono-num">
+                        <RankCell p={p} />
+                      </td>
                       {/* Always populated on a delivered lead — mbi_fetched_at is
                           never null here (see the comment on it in mock-data.ts).
                           No pending branch: that state cannot occur on this table.
