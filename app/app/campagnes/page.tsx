@@ -370,7 +370,8 @@ export default function CampagnesPage() {
                   {c.commune.nom} <span className="mono-num">({c.commune.dept_code})</span>
                 </div>
                 <div className="campaign-card-stats">
-                  <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
+                  <span className="mono-num">{c.leads_delivered}</span> entreprise
+                  {c.leads_delivered > 1 ? 's' : ''} livrée{c.leads_delivered > 1 ? 's' : ''}
                   {/* 'completed' shows no percentage -- 100% by definition.
                       'exhausted' shows none either, and that is MEASURED,
                       not assumed: campaign_status only reaches 'exhausted'
@@ -388,7 +389,7 @@ export default function CampagnesPage() {
                   {(displayStatus === 'in_progress' ||
                     displayStatus === 'failed' ||
                     displayStatus === 'quota_reached') && (
-                    <span className="campaign-card-pct mono-num"> · {completionPct(c)}%</span>
+                    <span className="campaign-card-pct mono-num"> · balayage {completionPct(c)}%</span>
                   )}
                 </div>
                 <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>

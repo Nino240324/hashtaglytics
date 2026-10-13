@@ -71,6 +71,11 @@ export type Prospect = {
   worst_rank: number | null;
   rank_spread: number | null;
   points_seen: number | null; // not displayed -- see the brief
+  // [D1/D2, 2026-10-13] Rank in Google's Local Finder list for the
+  // commune. NULL unless the discovery pass saw this business in this
+  // campaign. NOT comparable to best_rank: different index, different
+  // question. No denominator exists -- see RankCell in the prospects page.
+  finder_rank: number | null;
 
   // The GRID POINT where the business ranked best, for the Maps link.
   // Never the business's own coordinates: a service-area listing carries
@@ -185,11 +190,16 @@ export type Campaign = {
   total_grids: number;
   completed_grids: number;
   businesses_found: number;
+  // [2026-10-13] What the agency actually received. businesses_found is
+  // the raw Google result count summed across grid points — 7,003 for a
+  // Paris campaign that delivered 200 — and reading it as prospects is
+  // the misunderstanding this exists to stop.
+  leads_delivered: number;
   created_at: string;
   completed_at: string | null;
 };
 
-const mockProspectsRaw: Omit<Prospect, 'gbp_siblings'>[] = [
+const mockProspectsRaw: Omit<Prospect, 'gbp_siblings' | 'finder_rank'>[] = [
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000001",
     "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
@@ -3355,7 +3365,7 @@ export const mockCommunes: Commune[] = [
   }
 ];
 
-export const mockCampaigns: Campaign[] = [
+const mockCampaignsRaw: Omit<Campaign, 'leads_delivered'>[] = [
   {
     "id": "cmp-0001-4aaa-8bbb-000000000001",
     "keyword": "plombier",
@@ -3519,6 +3529,15 @@ export const mockCampaigns: Campaign[] = [
     "completed_at": null
   }
 ];
+
+// [2026-10-13] leads_delivered is REQUIRED on Campaign, and these nine
+// rows predate it. Attached here rather than edited into each object,
+// same pattern as gbp_siblings below. 0 is honest for mock data: these
+// campaigns never delivered anything, they were never real.
+export const mockCampaigns: Campaign[] = mockCampaignsRaw.map((c): Campaign => ({
+  ...c,
+  leads_delivered: 0,
+}));
 // [D-1 Phase B 2026-10-05] gbp_siblings is REQUIRED on Prospect (not
 // optional — `undefined` would skip the `=== null` branch and then
 // Object.keys(undefined) throws), and the 40 rows above predate it, exactly
@@ -3530,6 +3549,9 @@ export const mockCampaigns: Campaign[] = [
 //   rest    null  never computed        -> renders "Pas encore traité"
 export const mockProspects: Prospect[] = mockProspectsRaw.map((p, i): Prospect => ({
   ...p,
+  // [D2 2026-10-13] Same reason as gbp_siblings: the 40 rows predate the
+  // column. null is the honest value — the discovery pass never ran on them.
+  finder_rank: null,
   gbp_siblings:
     i === 0
       ? { ChIJmockSibling000000000: { name: 'FME-ENERGIES', match_on: 'phone' } }
@@ -4526,7 +4548,12 @@ const NO_COMMUNE_FALLBACK: Commune = {
 // Shared by fetchCampaignsOverview and fetchCampaign -- both run the same
 // nested select and need the same three flattening steps applied to each
 // row, so this is written once rather than duplicated.
-function mapCampaignRow(row: any, businessesFound: number): Campaign {
+//
+// [2026-10-13] leadsDelivered added as a third parameter. businesses_found
+// is the raw Google result count summed across grid points -- 7,003 for a
+// Paris campaign that delivered 200 -- and the card was printing it as if
+// it were prospects.
+function mapCampaignRow(row: any, businessesFound: number, leadsDelivered: number): Campaign {
   // Fallback chain per Opus: commune -> active region -> "France".
   // "France" alone would discard something real -- a region-scoped
   // campaign was genuinely scoped to e.g. Hauts-de-France, and an
@@ -4541,6 +4568,7 @@ function mapCampaignRow(row: any, businessesFound: number): Campaign {
       total_grids: row.total_grids,
       completed_grids: row.completed_grids,
       businesses_found: businessesFound,
+      leads_delivered: leadsDelivered,
       created_at: row.created_at,
       completed_at: row.completed_at,
     };
@@ -4562,6 +4590,7 @@ function mapCampaignRow(row: any, businessesFound: number): Campaign {
     total_grids: row.total_grids,
     completed_grids: row.completed_grids,
     businesses_found: businessesFound,
+    leads_delivered: leadsDelivered,
     created_at: row.created_at,
     completed_at: row.completed_at,
   };
@@ -4611,12 +4640,21 @@ export async function fetchCampaignsOverview(): Promise<{
     console.error('fetchCampaignsOverview query failed', error);
   }
   const rows = (data as any[]) ?? [];
-  const sums = await fetchBusinessesFoundByCampaign(
-    supabase,
-    rows.map((r) => r.id),
-  );
+  // [2026-10-13] campaign_status is the single definition of where a
+  // campaign stands and already returns leads_delivered per campaign.
+  // Omitting the id returns the whole agency in one call -- which is
+  // exactly what fetchCampaignStatuses was built for.
+  const [sums, statuses] = await Promise.all([
+    fetchBusinessesFoundByCampaign(
+      supabase,
+      rows.map((r) => r.id),
+    ),
+    fetchCampaignStatuses(),
+  ]);
   return {
-    campaigns: rows.map((row) => mapCampaignRow(row, sums[row.id] ?? 0)),
+    campaigns: rows.map((row) =>
+      mapCampaignRow(row, sums[row.id] ?? 0, statuses[row.id]?.delivered ?? 0),
+    ),
     planUsage: await fetchAgencyPlanUsage(),
   };
 }
@@ -4632,8 +4670,11 @@ export async function fetchCampaign(id: string): Promise<Campaign | null> {
     console.error('fetchCampaign query failed', error);
   }
   if (data === null || data === undefined) return null;
-  const sums = await fetchBusinessesFoundByCampaign(supabase, [id]);
-  return mapCampaignRow(data, sums[id] ?? 0);
+  const [sums, statuses] = await Promise.all([
+    fetchBusinessesFoundByCampaign(supabase, [id]),
+    fetchCampaignStatuses(id),
+  ]);
+  return mapCampaignRow(data, sums[id] ?? 0, statuses[id]?.delivered ?? 0);
 }
 
 // -- Campaign progress polling (brief 5.3, corrected by Opus) -----------
