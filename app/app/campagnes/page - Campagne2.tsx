@@ -9,7 +9,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   createCampaign,
   fetchCampaignsOverview,
-  fetchCampaignStatuses,
+  DEFAULT_CAMPAIGN_PAGE_SIZE,
   completionPct,
   type AgencyPlanUsage,
   type Campaign,
@@ -122,6 +122,21 @@ function CampaignMenu() {
   );
 }
 
+// First, last, current ±1, with ellipses. Same helper as the prospects
+// page, kept identical on purpose so the two controls behave the same.
+function pageWindow(current: number, total: number): (number | 'ellipsis')[] {
+  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
+  const sorted = Array.from(pages)
+    .filter((p) => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+  const out: (number | 'ellipsis')[] = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push('ellipsis');
+    out.push(sorted[i]);
+  }
+  return out;
+}
+
 export default function CampagnesPage() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -131,6 +146,15 @@ export default function CampagnesPage() {
   // built for this list on 2026-09-28 and never wired up here.
   const [statuses, setStatuses] = useState<Record<string, CampaignStageStatus>>({});
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  // Starts false on every mount including a bfcache restore, flips true
+  // only inside an effect -- same reason as the prospects page: content
+  // gated on it is never part of React's hydration comparison.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  // Latest-request-wins: clicking through pages quickly must not let an
+  // older in-flight response overwrite a newer one.
+  const requestIdRef = useRef(0);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [keywordInput, setKeywordInput] = useState('');
@@ -145,17 +169,26 @@ export default function CampagnesPage() {
   // ONE round trip for both, not two sequential ones -- campaign_status()
   // is a single RPC over the agency's own campaigns and does not depend
   // on the overview query's result.
+    // ONE round trip for all four, not two calls that each re-run
+  // campaign_status over the whole agency.
   const load = useCallback(async () => {
+    const requestId = (requestIdRef.current += 1);
     setLoading(true);
-    const [{ campaigns, planUsage }, statusMap] = await Promise.all([
-      fetchCampaignsOverview(),
-      fetchCampaignStatuses(),
-    ]);
-    setCampaigns(campaigns);
-    setPlanUsage(planUsage);
-    setStatuses(statusMap);
-    setLoading(false);
-  }, []);
+    try {
+      const result = await fetchCampaignsOverview({
+        page,
+        pageSize: DEFAULT_CAMPAIGN_PAGE_SIZE,
+      });
+      if (requestId !== requestIdRef.current) return; // a newer request started
+      setCampaigns(result.campaigns);
+      setPlanUsage(result.planUsage);
+      setStatuses(result.statuses);
+      setTotalCount(result.totalCount);
+      setHasLoaded(true);
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, [page]);
 
   useEffect(() => {
     load();
@@ -268,6 +301,10 @@ export default function CampagnesPage() {
     }
   }
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_CAMPAIGN_PAGE_SIZE));
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * DEFAULT_CAMPAIGN_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * DEFAULT_CAMPAIGN_PAGE_SIZE, totalCount);
+
   return (
     <Tooltip.Provider delayDuration={200}>
     <div>
@@ -332,9 +369,14 @@ export default function CampagnesPage() {
         )}
       </div>
 
-      {loading ? (
+      {/* !hasLoaded, not loading: "Chargement…" belongs to the FIRST load
+          only. On a page change the cards stay put and dim, instead of the
+          whole list vanishing and coming back. totalCount, not
+          campaigns.length: on page 2 an empty array means "past the end",
+          not "this agency has no campaigns". */}
+      {!hasLoaded ? (
         <p className="loading-text">Chargement…</p>
-      ) : campaigns.length === 0 ? (
+      ) : totalCount === 0 ? (
         <div className="empty-state campaigns-empty-state">
           <h2>Aucune campagne pour l&rsquo;instant.</h2>
           {planUsage?.tierName === 'free' ? (
@@ -353,7 +395,12 @@ export default function CampagnesPage() {
           </button>
         </div>
       ) : (
-        <div className="campaign-card-grid">
+        <>
+        <div
+          className="campaign-card-grid"
+          aria-busy={loading}
+          style={loading ? { opacity: 0.6 } : undefined}
+        >
           {campaigns.map((c) => {
             const displayStatus = displayStatusOf(c);
             return (
@@ -370,7 +417,8 @@ export default function CampagnesPage() {
                   {c.commune.nom} <span className="mono-num">({c.commune.dept_code})</span>
                 </div>
                 <div className="campaign-card-stats">
-                  <span className="mono-num">{c.businesses_found}</span> entreprises trouvées
+                  <span className="mono-num">{c.leads_delivered}</span> entreprise
+                  {c.leads_delivered > 1 ? 's' : ''} livrée{c.leads_delivered > 1 ? 's' : ''}
                   {/* 'completed' shows no percentage -- 100% by definition.
                       'exhausted' shows none either, and that is MEASURED,
                       not assumed: campaign_status only reaches 'exhausted'
@@ -388,15 +436,55 @@ export default function CampagnesPage() {
                   {(displayStatus === 'in_progress' ||
                     displayStatus === 'failed' ||
                     displayStatus === 'quota_reached') && (
-                    <span className="campaign-card-pct mono-num"> · {completionPct(c)}%</span>
+                    <span className="campaign-card-pct mono-num"> · balayage {completionPct(c)}%</span>
                   )}
                 </div>
                 <div className="campaign-card-date">Créée le {formatDateFR(c.created_at)}</div>
               </div>
-            </Link>
+                       </Link>
             );
           })}
         </div>
+
+        <div className="pagination" aria-label="Pagination">
+          <span className="page-range">
+            {rangeStart}–{rangeEnd} sur {totalCount}
+          </span>
+          <div className="page-buttons">
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ‹ Précédent
+            </button>
+            {pageWindow(page, totalPages).map((entry, i) =>
+              entry === 'ellipsis' ? (
+                <span key={`e${i}`} className="page-ellipsis">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={entry}
+                  type="button"
+                  className={entry === page ? 'active' : undefined}
+                  disabled={loading}
+                  onClick={() => setPage(entry)}
+                >
+                  {entry}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Suivant ›
+            </button>
+          </div>
+        </div>
+        </>
       )}
 
       <Modal isOpen={modalOpen} onClose={closeModal} title="Nouvelle campagne">

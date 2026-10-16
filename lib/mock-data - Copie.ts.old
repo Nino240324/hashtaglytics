@@ -71,6 +71,11 @@ export type Prospect = {
   worst_rank: number | null;
   rank_spread: number | null;
   points_seen: number | null; // not displayed -- see the brief
+  // [D1/D2, 2026-10-13] Rank in Google's Local Finder list for the
+  // commune. NULL unless the discovery pass saw this business in this
+  // campaign. NOT comparable to best_rank: different index, different
+  // question. No denominator exists -- see RankCell in the prospects page.
+  finder_rank: number | null;
 
   // The GRID POINT where the business ranked best, for the Maps link.
   // Never the business's own coordinates: a service-area listing carries
@@ -88,6 +93,11 @@ export type Prospect = {
   // below, which is the grid point where it ranked best, not the
   // business itself.
   place_id: string | null;
+    // Sibling Google Business Profiles of the SAME COMPANY, keyed by
+  // place_id. Written by deliver_leads at the moment of sale, matched on
+  // phone OR normalised name. null = never computed (delivered before this
+  // shipped); {} = computed, none found. Those are different claims.
+  gbp_siblings: Record<string, { name: string; match_on: 'phone' | 'name' }> | null;
   review_count: number | null;
   rating: number | null; // NULL on older scans -- no stars then
   photo_count: number | null;
@@ -180,11 +190,16 @@ export type Campaign = {
   total_grids: number;
   completed_grids: number;
   businesses_found: number;
+  // [2026-10-13] What the agency actually received. businesses_found is
+  // the raw Google result count summed across grid points — 7,003 for a
+  // Paris campaign that delivered 200 — and reading it as prospects is
+  // the misunderstanding this exists to stop.
+  leads_delivered: number;
   created_at: string;
   completed_at: string | null;
 };
 
-export const mockProspects: Prospect[] = [
+const mockProspectsRaw: Omit<Prospect, 'gbp_siblings' | 'finder_rank'>[] = [
   {
     "id": "a1b2c3d4-0001-4aaa-8bbb-000000000001",
     "campaign_id": "cmp-0001-4aaa-8bbb-000000000001",
@@ -3350,7 +3365,7 @@ export const mockCommunes: Commune[] = [
   }
 ];
 
-export const mockCampaigns: Campaign[] = [
+const mockCampaignsRaw: Omit<Campaign, 'leads_delivered'>[] = [
   {
     "id": "cmp-0001-4aaa-8bbb-000000000001",
     "keyword": "plombier",
@@ -3515,6 +3530,35 @@ export const mockCampaigns: Campaign[] = [
   }
 ];
 
+// [2026-10-13] leads_delivered is REQUIRED on Campaign, and these nine
+// rows predate it. Attached here rather than edited into each object,
+// same pattern as gbp_siblings below. 0 is honest for mock data: these
+// campaigns never delivered anything, they were never real.
+export const mockCampaigns: Campaign[] = mockCampaignsRaw.map((c): Campaign => ({
+  ...c,
+  leads_delivered: 0,
+}));
+// [D-1 Phase B 2026-10-05] gbp_siblings is REQUIRED on Prospect (not
+// optional — `undefined` would skip the `=== null` branch and then
+// Object.keys(undefined) throws), and the 40 rows above predate it, exactly
+// like every lead delivered before the column shipped. Rather than add the
+// key forty times, it is attached here — with one row of each of the three
+// states, so all three UI branches are visible without a live delivery:
+//   row 0   a sibling matched on phone — the FME-ENERGIES case
+//   row 1   {}    computed, none found  -> renders "Non"
+//   rest    null  never computed        -> renders "Pas encore traité"
+export const mockProspects: Prospect[] = mockProspectsRaw.map((p, i): Prospect => ({
+  ...p,
+  // [D2 2026-10-13] Same reason as gbp_siblings: the 40 rows predate the
+  // column. null is the honest value — the discovery pass never ran on them.
+  finder_rank: null,
+  gbp_siblings:
+    i === 0
+      ? { ChIJmockSibling000000000: { name: 'FME-ENERGIES', match_on: 'phone' } }
+      : i === 1
+        ? {}
+        : null,
+}));
 // -- Status tabs (unchanged from the v1 prospects build) ---------------
 
 export type ProspectStatusTab =
@@ -3571,10 +3615,25 @@ export function getFicheGoogleState(p: Prospect): FicheGoogleState {
 
 export type EmailCellState = 'pending' | 'has_email' | 'no_email';
 
+// >>> A MARKER THAT IS NEVER SET IS NOT "PENDING". <<< #19b fetches
+// website_kind = 'own' ONLY, so a lead with no own site keeps
+// email_checked_at null forever, and the old rule showed "Pas encore
+// traité" on it for good. Seen live 2026-09-23: every row on
+// Asnières-sur-Seine, four of six on Châtillon — all of them finished,
+// none of them ever going to be checked.
+//
+// Order matters: an address found before a nightly reclassification
+// moved the business to 'directory' is still a real address, so the
+// value is tested before the eligibility.
 export function getEmailCellState(p: Prospect): EmailCellState {
-  if (p.email_checked_at === null) return 'pending';
-  if (p.email === null) return 'no_email';
-  return 'has_email';
+  if (p.email !== null) return 'has_email';
+  // Checked, nothing found. apply_fetch_results sets email_checked_at
+  // even when the fetch failed, so a dead site lands here too.
+  if (p.email_checked_at !== null) return 'no_email';
+  // No own site: no pass will ever look. "Aucune adresse" is the honest
+  // answer — the agency has none and never will from us.
+  if (p.website_kind !== 'own') return 'no_email';
+  return 'pending';
 }
 
 // Only 'mismatch' is a finding worth a marker. 'no_website' means no
@@ -3916,6 +3975,71 @@ export async function updateProspectOutcome(
   }
 }
 
+export type PdfRenderResult =
+  | { ok: true; url: string; filename: string; cached: boolean }
+  | { ok: false; message: string };
+
+// Shared by both PDF buttons. kind stays 'client' | 'agency' internally
+// -- tied to pdf_url_customer / pdf_url_agency -- even though the
+// user-facing labels are changing (Fiche prospect / Fiche agence).
+// RENDER_URL is an env var, not a hardcoded string, since it's
+// localhost today and becomes a real Render URL once deployed.
+export async function renderProspectPdf(
+  leadId: string,
+  kind: 'client' | 'agency',
+): Promise<PdfRenderResult> {
+  const supabase = createClient();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || sessionData.session === null) {
+    return { ok: false, message: 'Session expirée. Reconnectez-vous.' };
+  }
+
+  const renderUrl = process.env.NEXT_PUBLIC_PDF_RENDER_URL;
+  if (!renderUrl) {
+    console.error('renderProspectPdf: NEXT_PUBLIC_PDF_RENDER_URL is not set');
+    return { ok: false, message: 'Service de génération non configuré.' };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${renderUrl}/render`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ lead_id: leadId, kind }),
+    });
+  } catch (err) {
+    console.error('renderProspectPdf: fetch failed', err);
+    return { ok: false, message: 'Le document n\u2019a pas pu être généré. Réessayez.' };
+  }
+
+  // 401 -- token expired. 404 -- deliberately the same answer whether
+  // the lead isn't yours or doesn't exist at all (a 403 would confirm
+  // it exists), so the message here stays equally vague, not filled in
+  // with a guess. 429 -- the only one the user can actually act on, so
+  // the only one with a specific, actionable message. 500 -- the
+  // service logs the detail and says nothing on purpose; matched here
+  // with an equally generic message, not invented detail.
+  if (res.status === 401) {
+    return { ok: false, message: 'Session expirée. Reconnectez-vous.' };
+  }
+  if (res.status === 404) {
+    return { ok: false, message: 'Document introuvable.' };
+  }
+  if (res.status === 429) {
+    return { ok: false, message: 'Trop de documents demandés, patientez une minute.' };
+  }
+  if (!res.ok) {
+    console.error('renderProspectPdf: render failed', res.status);
+    return { ok: false, message: 'Le document n\u2019a pas pu être généré. Réessayez.' };
+  }
+
+  const body = (await res.json()) as { url: string; filename: string; cached: boolean };
+  return { ok: true, url: body.url, filename: body.filename, cached: body.cached };
+}
+
 // Now async against real data -- callers updated accordingly
 // (prospects/page.tsx). No DISTINCT in PostgREST, so dedupe happens
 // client-side; fine at ~107 rows, would become an RPC if that ever
@@ -4107,7 +4231,11 @@ export async function fetchAgencyPlanUsage(): Promise<AgencyPlanUsage> {
     // which is exactly what this diagnostic step is for.
     //
     // max_leads_per_month deliberately NOT selected here -- see below.
-    supabase.from('agencies').select('subscription_tiers(tier_name, max_active_campaigns)').single(),
+   // line ~4190
+    supabase
+    .from('agencies')
+    .select('custom_max_active_campaigns, subscription_tiers(tier_name, max_active_campaigns)')
+    .single(),
     supabase.from('campaigns').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
   ]);
 
@@ -4129,7 +4257,11 @@ export async function fetchAgencyPlanUsage(): Promise<AgencyPlanUsage> {
     // enforced live by a trigger, not snapshotted into a period, so the
     // tier's current value genuinely is the right source, unlike the
     // lead quota below.
-    maxActiveCampaigns: tier?.max_active_campaigns ?? null,
+    // line ~4212 — override first, tier as fallback, same as every other limit
+    maxActiveCampaigns:
+      (agencyResult.data as any)?.custom_max_active_campaigns
+      ?? tier?.max_active_campaigns
+      ?? null,
     activeCampaigns: campaignsResult.count ?? 0,
     leads_delivered_this_period: (quotaResult.data as any)?.leads_used ?? 0,
     // Bug fixed per Opus: this must come from lead_quota_periods.leads_quota,
@@ -4416,7 +4548,12 @@ const NO_COMMUNE_FALLBACK: Commune = {
 // Shared by fetchCampaignsOverview and fetchCampaign -- both run the same
 // nested select and need the same three flattening steps applied to each
 // row, so this is written once rather than duplicated.
-function mapCampaignRow(row: any, businessesFound: number): Campaign {
+//
+// [2026-10-13] leadsDelivered added as a third parameter. businesses_found
+// is the raw Google result count summed across grid points -- 7,003 for a
+// Paris campaign that delivered 200 -- and the card was printing it as if
+// it were prospects.
+function mapCampaignRow(row: any, businessesFound: number, leadsDelivered: number): Campaign {
   // Fallback chain per Opus: commune -> active region -> "France".
   // "France" alone would discard something real -- a region-scoped
   // campaign was genuinely scoped to e.g. Hauts-de-France, and an
@@ -4431,6 +4568,7 @@ function mapCampaignRow(row: any, businessesFound: number): Campaign {
       total_grids: row.total_grids,
       completed_grids: row.completed_grids,
       businesses_found: businessesFound,
+      leads_delivered: leadsDelivered,
       created_at: row.created_at,
       completed_at: row.completed_at,
     };
@@ -4452,6 +4590,7 @@ function mapCampaignRow(row: any, businessesFound: number): Campaign {
     total_grids: row.total_grids,
     completed_grids: row.completed_grids,
     businesses_found: businessesFound,
+    leads_delivered: leadsDelivered,
     created_at: row.created_at,
     completed_at: row.completed_at,
   };
@@ -4487,27 +4626,69 @@ const CAMPAIGN_SELECT = `
   campaign_regions ( region_name, status )
 `;
 
-export async function fetchCampaignsOverview(): Promise<{
+// A card grid, not a table -- 12 fills three or four rows at desktop
+// width without scrolling. Prospects uses 50 because it is a dense table.
+export const DEFAULT_CAMPAIGN_PAGE_SIZE = 12;
+
+// >>> PAGINATED, AND THE STATUS MAP COMES BACK WITH IT. <<< [2026-10-16]
+// Three separate problems, all on this one load:
+//   1. no limit on the campaigns query;
+//   2. fetchBusinessesFoundByCampaign pulled one row per grid point of
+//      EVERY campaign -- thousands of rows to produce a handful of sums;
+//   3. campaign_status() ran TWICE per load, once here and once in
+//      page.tsx's own Promise.all, each time over the whole agency.
+// The statuses map is returned from here so the page never calls it
+// again. campaign_status still covers the whole agency in that one call
+// -- it takes one id or all, no list -- so if the page is still slow
+// after this, that function needs a p_campaign_ids uuid[] parameter and
+// that is a database change, not a frontend one.
+export async function fetchCampaignsOverview(params?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<{
   campaigns: Campaign[];
   planUsage: AgencyPlanUsage;
+  statuses: Record<string, CampaignStageStatus>;
+  totalCount: number;
 }> {
   const supabase = createClient();
+  const page = params?.page ?? 1;
+  const pageSize = params?.pageSize ?? DEFAULT_CAMPAIGN_PAGE_SIZE;
+  const from = (page - 1) * pageSize;
+
   // No agency_id filter -- RLS scopes this to the current agency.
-  const { data, error } = await supabase
+  // .order('id') is the deterministic tiebreaker, same reason as
+  // applyProspectSort: two campaigns created in the same instant can
+  // otherwise land in a different order per page, so one appears twice
+  // and another never appears at all.
+  const { data, error, count } = await supabase
     .from('campaigns')
-    .select(CAMPAIGN_SELECT)
-    .order('created_at', { ascending: false });
+    .select(CAMPAIGN_SELECT, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .order('id')
+    .range(from, from + pageSize - 1);
   if (error) {
     console.error('fetchCampaignsOverview query failed', error);
   }
   const rows = (data as any[]) ?? [];
-  const sums = await fetchBusinessesFoundByCampaign(
-    supabase,
-    rows.map((r) => r.id),
-  );
+
+  // Scoped to THIS PAGE's ids, not every campaign the agency owns.
+  const [sums, statuses, planUsage] = await Promise.all([
+    fetchBusinessesFoundByCampaign(
+      supabase,
+      rows.map((r) => r.id),
+    ),
+    fetchCampaignStatuses(),
+    fetchAgencyPlanUsage(),
+  ]);
+
   return {
-    campaigns: rows.map((row) => mapCampaignRow(row, sums[row.id] ?? 0)),
-    planUsage: await fetchAgencyPlanUsage(),
+    campaigns: rows.map((row) =>
+      mapCampaignRow(row, sums[row.id] ?? 0, statuses[row.id]?.delivered ?? 0),
+    ),
+    planUsage,
+    statuses,
+    totalCount: count ?? 0,
   };
 }
 
@@ -4522,8 +4703,11 @@ export async function fetchCampaign(id: string): Promise<Campaign | null> {
     console.error('fetchCampaign query failed', error);
   }
   if (data === null || data === undefined) return null;
-  const sums = await fetchBusinessesFoundByCampaign(supabase, [id]);
-  return mapCampaignRow(data, sums[id] ?? 0);
+  const [sums, statuses] = await Promise.all([
+    fetchBusinessesFoundByCampaign(supabase, [id]),
+    fetchCampaignStatuses(id),
+  ]);
+  return mapCampaignRow(data, sums[id] ?? 0, statuses[id]?.delivered ?? 0);
 }
 
 // -- Campaign progress polling (brief 5.3, corrected by Opus) -----------
@@ -4545,32 +4729,72 @@ export async function fetchCampaign(id: string): Promise<Campaign | null> {
 // is gated against remaining quota, so a campaign may legitimately never
 // reach 100% enriched, and a boolean would sit false forever while a
 // count reads 150 / 400 and is honest about it.
+// One row of campaign_status(), the database function that is now the
+// SINGLE definition of where a campaign stands — used by this screen AND
+// by the campaign list, which used to read campaigns.status directly and
+// therefore said "Terminée" as soon as the scan finished, four stages
+// early.
+//
+// EVERY "done" BELOW COMES FROM THE DATABASE, not from watching a count.
+// The old client-side rule was "the count did not change between two
+// polls 3 seconds apart"; MBI runs every 1-3 minutes, so any quiet
+// moment read as finished. Seen live on coiffeur/Paris: all three stages
+// ticked done at 796 leads while delivery was still running.
+// campaigns.status holds five values (campaigns_status_check). The BADGE
+// has six: campaign_status computes 'exhausted' for a campaign that
+// finished without filling its order. It is COMPUTED TEXT, never stored,
+// so widening Campaign['status'] instead would make that type lie about
+// what the column can hold -- and mapCampaignRow assigns row.status
+// straight into it.
+export type DisplayStatus = Campaign['status'] | 'exhausted';
+
+export type CampaignStageStatus = {
+  campaignId: string;
+  // campaigns.status as stored — kept for reference, never displayed.
+  rawStatus: Campaign['status'];
+  // What the badge shows. Six values, not five — see DisplayStatus above.
+  displayStatus: DisplayStatus;
+  scanDone: boolean;
+  qualificationDone: boolean;
+  enrichmentDone: boolean;
+  deliveryDone: boolean;
+  sitesDone: boolean;
+  emailsDone: boolean;
+  // True when the quota is spent: nothing upstream moves until the
+  // period resets, so the remaining work is not "in progress".
+  quotaExhausted: boolean;
+};
+
 export type CampaignProgress = {
   total: number;
   scanned: number;
   inFlight: number;
   businesses: number; // observations (sum across grid points), NOT distinct businesses
-  // All three are the same number, always -- campaign_progress_view only
-  // contains delivered leads to begin with, so "qualified" and "enriched"
-  // here mean "delivered leads at that stage", not the real upstream
-  // funnel (which the browser is deliberately never shown -- see
-  // leads_own_delivered).
+
+  // All three are the same number, always — only delivered leads are
+  // visible to the browser. The real upstream funnel stays invisible on
+  // purpose (KU-107): an agency watching 1,125 become 192 sees
+  // three-quarters of something disappearing.
   leadsQualified: number;
   leadsEnriched: number;
-  leadsDelivered: number; // the one that puts leads on /app/prospects
-  sitesAnalysed: number; // html_checked_at
-  // The true denominator for the site stage -- not every delivered lead
-  // has a website at all (website_kind 'none' never gets
-  // html_checked_at). Done means sitesAnalysed === sitesEligible, not
-  // sitesAnalysed > 0.
+  leadsDelivered: number;
+
+  // website_kind = 'own' ONLY. The old denominator was "has any link at
+  // all", which counted Doctolib, Facebook and directory pages that
+  // #19b never claims — ostéopathe showed 769 eligible against 164 real,
+  // coiffeur 169 against 44, so the two numbers could never meet and the
+  // screen never finished.
   sitesEligible: number;
-  emailsVerified: number; // email_checked_at
-  // The true denominator for the email stage -- only leads where the
-  // SITE PASS found an address are eligible. This number is only
-  // meaningful once the site stage is done (email_eligible depends on
-  // that pass having run); read early, it's near-zero for a reason
-  // unrelated to how many addresses actually exist.
+  sitesAnalysed: number;
+
+  // Addresses actually sent to Bouncer. The old "verified" count was
+  // email_checked_at, which marks the website having been SEARCHED for
+  // an address, not an address having been verified — a different set of
+  // leads entirely.
   emailsEligible: number;
+  emailsVerified: number;
+
+  stage: CampaignStageStatus;
 };
 
 // A town campaign is 40-150 grid points and completes in ~3 minutes,
@@ -4620,136 +4844,102 @@ export function computeCampaignFunnel(
   return { leadsQualified, leadsEnriched, leadsDelivered };
 }
 
+// The campaign list needs every campaign's status in ONE call, so this
+// takes an optional id: omit it and the function returns the whole
+// agency's campaigns, keyed by id.
+//
+// The agency is NEVER passed — campaign_status resolves it from
+// auth.uid() through current_agency_ids(), the same boundary
+// create_campaign uses. It is SECURITY DEFINER because everything still
+// pending sits on UNDELIVERED leads, which leads_own_delivered hides
+// from the browser; it returns booleans and delivered-lead counts only.
+export async function fetchCampaignStatuses(
+  campaignId?: string,
+): Promise<Record<string, CampaignStageStatus & {
+  total: number; scanned: number; delivered: number;
+  sitesEligible: number; sitesAnalysed: number;
+  emailsEligible: number; emailsVerified: number;
+}>> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc('campaign_status', {
+    p_campaign_id: campaignId ?? null,
+  });
+  if (error) {
+    console.error('fetchCampaignStatuses RPC failed', error);
+    return {};
+  }
+  const out: Record<string, any> = {};
+  for (const r of (data as any[]) ?? []) {
+    out[r.campaign_id] = {
+      campaignId: r.campaign_id,
+      rawStatus: r.raw_status,
+      displayStatus: r.display_status,
+      total: r.total_grids,
+      scanned: r.scanned_grids,
+      delivered: r.leads_delivered,
+      sitesEligible: r.sites_eligible,
+      sitesAnalysed: r.sites_analysed,
+      emailsEligible: r.emails_eligible,
+      emailsVerified: r.emails_verified,
+      scanDone: r.scan_done,
+      qualificationDone: r.qualification_done,
+      enrichmentDone: r.enrichment_done,
+      deliveryDone: r.delivery_done,
+      sitesDone: r.sites_done,
+      emailsDone: r.emails_done,
+      quotaExhausted: r.quota_exhausted,
+    };
+  }
+  return out;
+}
+
 export async function fetchCampaignProgress(id: string): Promise<CampaignProgress | null> {
   const supabase = createClient();
 
   // Bounded by this campaign's own total_grids (40-150 rows for a town
-  // campaign) -- never query business_grid_positions or anything
-  // unbounded here. This runs every 3 seconds; an unbounded query on a
-  // 3s poll is the mistake that would make the whole site struggle.
-  // Unchanged from before -- this half was already correct.
+  // campaign). This runs every 3 seconds; an unbounded query on a 3s
+  // poll is the mistake that would make the whole site struggle. Kept
+  // because businesses_found lives only here — campaign_status does not
+  // return it.
   const scanQuery = supabase
     .from('campaign_grids')
     .select('processed_at, status, businesses_found')
     .eq('campaign_id', id);
 
-  // campaign_progress_view, NOT prospect_view -- prospect_view's lateral
-  // computes best/worst rank across every grid point per row (what
-  // produces "13e -> 55e" on /app/prospects), which is wasted work here
-  // and exactly the mistake this function's own comment above already
-  // warns against on a poll this frequent.
-  //
-  // Every row in this view is already a delivered lead, so "qualified"
-  // and "enriched" below are really the same count as "delivered" --
-  // the real upstream funnel (how many were qualified/enriched BEFORE
-  // delivery) is deliberately invisible to the browser, restricted by
-  // leads_own_delivered. Querying leads directly for those numbers (the
-  // previous version of this function) returned exactly one number for
-  // both, by design, not a bug in the query itself.
-  const qualifiedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id);
-  const enrichedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('mbi_fetched_at', 'is', null);
-  const deliveredQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id);
-  const sitesAnalysedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('html_checked_at', 'is', null);
-  const sitesEligibleQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .eq('site_eligible', true);
-  const emailsVerifiedQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .not('email_checked_at', 'is', null);
-  const emailsEligibleQuery = supabase
-    .from('campaign_progress_view')
-    .select('id', { count: 'exact', head: true })
-    .eq('campaign_id', id)
-    .eq('email_eligible', true);
-
-  const [
-    scanResult,
-    qualifiedResult,
-    enrichedResult,
-    deliveredResult,
-    sitesAnalysedResult,
-    sitesEligibleResult,
-    emailsVerifiedResult,
-    emailsEligibleResult,
-  ] = await Promise.all([
-    scanQuery,
-    qualifiedQuery,
-    enrichedQuery,
-    deliveredQuery,
-    sitesAnalysedQuery,
-    sitesEligibleQuery,
-    emailsVerifiedQuery,
-    emailsEligibleQuery,
-  ]);
+  const [scanResult, statuses] = await Promise.all([scanQuery, fetchCampaignStatuses(id)]);
 
   if (scanResult.error) {
     console.error('fetchCampaignProgress: campaign_grids query failed', scanResult.error);
   }
-  if (qualifiedResult.error) {
-    console.error('fetchCampaignProgress: qualified count failed', qualifiedResult.error);
-  }
-  if (enrichedResult.error) {
-    console.error('fetchCampaignProgress: enriched count failed', enrichedResult.error);
-  }
-  if (deliveredResult.error) {
-    console.error('fetchCampaignProgress: delivered count failed', deliveredResult.error);
-  }
-  if (sitesAnalysedResult.error) {
-    console.error('fetchCampaignProgress: sites-analysed count failed', sitesAnalysedResult.error);
-  }
-  if (sitesEligibleResult.error) {
-    console.error('fetchCampaignProgress: sites-eligible count failed', sitesEligibleResult.error);
-  }
-  if (emailsVerifiedResult.error) {
-    console.error('fetchCampaignProgress: emails-verified count failed', emailsVerifiedResult.error);
-  }
-  if (emailsEligibleResult.error) {
-    console.error('fetchCampaignProgress: emails-eligible count failed', emailsEligibleResult.error);
-  }
 
-  const gridRows = (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
+  const gridRows =
+    (scanResult.data as { processed_at: string | null; status: string; businesses_found: number }[]) ?? [];
   if (gridRows.length === 0) return null;
 
-  const total = gridRows.length;
-  // processed_at, NEVER status -- a row can carry status='completed'
-  // with processed_at still null. complete_grid_point is the only thing
-  // that sets processed_at, so a timestamp means it genuinely happened;
-  // counting by status would overstate progress on rows that never
-  // actually scanned.
+  const stage = statuses[id];
+  // No row means the campaign is not this agency's, or the RPC failed.
+  // Returning null shows "Campagne introuvable" rather than a screen of
+  // zeros that looks like a campaign which found nothing.
+  if (stage === undefined) return null;
+
+  // processed_at, NEVER status — a row can carry status='completed' with
+  // processed_at still null (KU-70). Same rule the database function
+  // uses, so the two can never disagree.
   const scanned = gridRows.filter((r) => r.processed_at !== null).length;
-  const inFlight = gridRows.filter((r) => r.status === 'in_progress').length;
-  const businesses = gridRows.reduce((sum, r) => sum + (r.businesses_found ?? 0), 0);
 
   return {
-    total,
+    total: gridRows.length,
     scanned,
-    inFlight,
-    businesses,
-    leadsQualified: qualifiedResult.count ?? 0,
-    leadsEnriched: enrichedResult.count ?? 0,
-    leadsDelivered: deliveredResult.count ?? 0,
-    sitesAnalysed: sitesAnalysedResult.count ?? 0,
-    sitesEligible: sitesEligibleResult.count ?? 0,
-    emailsVerified: emailsVerifiedResult.count ?? 0,
-    emailsEligible: emailsEligibleResult.count ?? 0,
+    inFlight: gridRows.filter((r) => r.status === 'in_progress').length,
+    businesses: gridRows.reduce((sum, r) => sum + (r.businesses_found ?? 0), 0),
+    leadsQualified: stage.delivered,
+    leadsEnriched: stage.delivered,
+    leadsDelivered: stage.delivered,
+    sitesEligible: stage.sitesEligible,
+    sitesAnalysed: stage.sitesAnalysed,
+    emailsEligible: stage.emailsEligible,
+    emailsVerified: stage.emailsVerified,
+    stage,
   };
 }
 
@@ -4780,17 +4970,25 @@ export async function fetchProspectsForCampaign(id: string): Promise<Prospect[]>
 // looks like a working campaign (a campaign slot burnt with no
 // commune, or one that sits at 0/0 forever). The database function does
 // all four in one transaction.
+//
+// leadsTarget is the number the CUSTOMER asked for, and it is now a
+// LIMIT. Until 2026-09-25 create_campaign wrote the agency's entire
+// remaining monthly quota into campaigns.leads_target and delivery
+// ignored the column anyway -- which is how one campaign delivered 1796
+// leads and took a whole month's allowance.
 export async function createCampaign(input: {
   keyword: string;
   codeInsee: string;
+  leadsTarget: number;
 }): Promise<{ ok: true; campaignId: string; gridPoints: number } | { ok: false; message: string }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc('create_campaign', {
     p_keyword: input.keyword,
     p_code_insee: input.codeInsee,
+    p_leads_target: input.leadsTarget,
   });
   if (error) {
-    // The two quota/limit errors are written to be shown verbatim to the
+    // The quota/limit errors are written to be shown verbatim to the
     // user (French, complete sentences) -- shown as-is rather than
     // replaced with a generic failure message. Anything else (unknown
     // commune, empty keyword) is developer-facing and shouldn't reach a

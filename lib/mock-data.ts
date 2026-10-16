@@ -4626,36 +4626,69 @@ const CAMPAIGN_SELECT = `
   campaign_regions ( region_name, status )
 `;
 
-export async function fetchCampaignsOverview(): Promise<{
+// A card grid, not a table -- 12 fills three or four rows at desktop
+// width without scrolling. Prospects uses 50 because it is a dense table.
+export const DEFAULT_CAMPAIGN_PAGE_SIZE = 12;
+
+// >>> PAGINATED, AND THE STATUS MAP COMES BACK WITH IT. <<< [2026-10-16]
+// Three separate problems, all on this one load:
+//   1. no limit on the campaigns query;
+//   2. fetchBusinessesFoundByCampaign pulled one row per grid point of
+//      EVERY campaign -- thousands of rows to produce a handful of sums;
+//   3. campaign_status() ran TWICE per load, once here and once in
+//      page.tsx's own Promise.all, each time over the whole agency.
+// The statuses map is returned from here so the page never calls it
+// again. campaign_status still covers the whole agency in that one call
+// -- it takes one id or all, no list -- so if the page is still slow
+// after this, that function needs a p_campaign_ids uuid[] parameter and
+// that is a database change, not a frontend one.
+export async function fetchCampaignsOverview(params?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<{
   campaigns: Campaign[];
   planUsage: AgencyPlanUsage;
+  statuses: Record<string, CampaignStageStatus>;
+  totalCount: number;
 }> {
   const supabase = createClient();
+  const page = params?.page ?? 1;
+  const pageSize = params?.pageSize ?? DEFAULT_CAMPAIGN_PAGE_SIZE;
+  const from = (page - 1) * pageSize;
+
   // No agency_id filter -- RLS scopes this to the current agency.
-  const { data, error } = await supabase
+  // .order('id') is the deterministic tiebreaker, same reason as
+  // applyProspectSort: two campaigns created in the same instant can
+  // otherwise land in a different order per page, so one appears twice
+  // and another never appears at all.
+  const { data, error, count } = await supabase
     .from('campaigns')
-    .select(CAMPAIGN_SELECT)
-    .order('created_at', { ascending: false });
+    .select(CAMPAIGN_SELECT, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .order('id')
+    .range(from, from + pageSize - 1);
   if (error) {
     console.error('fetchCampaignsOverview query failed', error);
   }
   const rows = (data as any[]) ?? [];
-  // [2026-10-13] campaign_status is the single definition of where a
-  // campaign stands and already returns leads_delivered per campaign.
-  // Omitting the id returns the whole agency in one call -- which is
-  // exactly what fetchCampaignStatuses was built for.
-  const [sums, statuses] = await Promise.all([
+
+  // Scoped to THIS PAGE's ids, not every campaign the agency owns.
+  const [sums, statuses, planUsage] = await Promise.all([
     fetchBusinessesFoundByCampaign(
       supabase,
       rows.map((r) => r.id),
     ),
     fetchCampaignStatuses(),
+    fetchAgencyPlanUsage(),
   ]);
+
   return {
     campaigns: rows.map((row) =>
       mapCampaignRow(row, sums[row.id] ?? 0, statuses[row.id]?.delivered ?? 0),
     ),
-    planUsage: await fetchAgencyPlanUsage(),
+    planUsage,
+    statuses,
+    totalCount: count ?? 0,
   };
 }
 
