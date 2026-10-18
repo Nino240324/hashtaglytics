@@ -39,7 +39,7 @@ const STATUS_LABELS: Record<DisplayStatus, string> = {
   failed: 'Échouée',
   paused: 'En pause',
   quota_reached: 'Quota atteint',
-  exhausted: 'Terminée · plus de prospects qualifiables',
+  exhausted: 'Terminée · Partiellement livrée',
 };
 
 // 'exhausted' is graded with quota_reached, NOT with completed: the work
