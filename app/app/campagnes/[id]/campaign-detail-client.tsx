@@ -367,22 +367,6 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
         </span>
       </div>
 
-      {/* Same shape as the quota note below, and for the same reason: a
-          status that stops short of the order needs a sentence, not a
-          badge the agency has to interpret. NOT "plus de prospects" and
-          NOT "zone vidée" — the market did not run out of businesses, it
-          ran out of businesses the qualification bar accepts (KU-145, the
-          bar is scale-dependent). And NOT "pour cette période": that is
-          the quota's vocabulary and this has nothing to do with the
-          monthly allowance. */}
-      {stage.displayStatus === 'exhausted' && (
-        <p className="campaign-quota-note">
-          Le balayage est terminé. Le marché n&rsquo;a plus
-          d&rsquo;établissements répondant aux critères de qualification
-          pour cette recherche.
-        </p>
-      )}
-
       {/* The quota is the one resting state an agency can act on, so it
           says so instead of leaving five half-ticked stages unexplained. */}
       {stage.displayStatus === 'quota_reached' && (
