@@ -427,8 +427,12 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
               <span className="mono-num">
                 {progress.scanned} / {progress.total} points balayés ({scanPct}%)
               </span>
+              {/* The label is now TRUE and so does not change: this is
+              distinct businesses, not observations. A dash when the
+              count is unavailable -- printing 0 would say we scanned
+              a town and found nobody. */}
               <span className="mono-num scan-businesses">
-                {progress.businesses} entreprises scannées
+                {progress.businesses === null ? '—' : progress.businesses} entreprises unique trouvées
               </span>
             </div>
           </div>

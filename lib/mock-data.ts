@@ -4935,7 +4935,12 @@ export type CampaignProgress = {
   total: number;
   scanned: number;
   inFlight: number;
-  businesses: number; // observations (sum across grid points), NOT distinct businesses
+  // [2026-10-22] DISTINCT BUSINESSES, from campaign_unique_businesses().
+  // Was the sum of campaign_grids.businesses_found — one row per (grid
+  // point, business), so Paris counted each of its 763 businesses 17.2
+  // times and printed 13,043. null = the RPC failed; the screen renders
+  // a dash, never a 0, which would read as "we found nothing".
+  businesses: number | null;
 
   // All three are the same number, always — only delivered leads are
   // visible to the browser. The real upstream funnel stays invisible on
@@ -5072,7 +5077,17 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
     .select('processed_at, status, businesses_found')
     .eq('campaign_id', id);
 
-  const [scanResult, statuses] = await Promise.all([scanQuery, fetchCampaignStatuses(id)]);
+   // Third call, not a third round trip -- it runs alongside the other
+  // two. campaign_status() is deliberately NOT the home for this: the
+  // campaign list calls it for the whole agency at once.
+  const [scanResult, statuses, uniqueResult] = await Promise.all([
+    scanQuery,
+    fetchCampaignStatuses(id),
+    supabase.rpc('campaign_unique_businesses', { p_campaign_id: id }),
+  ]);
+  if (uniqueResult.error) {
+    console.error('fetchCampaignProgress: campaign_unique_businesses failed', uniqueResult.error);
+  }
 
   if (scanResult.error) {
     console.error('fetchCampaignProgress: campaign_grids query failed', scanResult.error);
@@ -5097,7 +5112,7 @@ export async function fetchCampaignProgress(id: string): Promise<CampaignProgres
     total: gridRows.length,
     scanned,
     inFlight: gridRows.filter((r) => r.status === 'in_progress').length,
-    businesses: gridRows.reduce((sum, r) => sum + (r.businesses_found ?? 0), 0),
+    businesses: uniqueResult.error ? null : ((uniqueResult.data as number | null) ?? 0),
     leadsQualified: stage.delivered,
     leadsEnriched: stage.delivered,
     leadsDelivered: stage.delivered,
