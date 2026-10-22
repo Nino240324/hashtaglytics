@@ -1606,3 +1606,78 @@ table.campaign-leads-table { width: 100%; border-collapse: collapse; min-width: 
   flex-shrink: 0;
 }
 .filtres-sheet-actions .btn { flex: 1; justify-content: center; min-height: 44px; }
+
+/* ── Campaign list filters [2026-10-22] ─────────────────────────────── */
+
+/* .filters-bar, .filter-group and .reset-btn above already carry the row,
+   the labels and the reset link. Three things are genuinely new: the
+   stacking rule, the type="text" input, and the listbox. */
+
+@media (max-width: 900px) {
+  .campagnes-filters-bar { flex-direction: column; align-items: stretch; }
+  .campagnes-filters-bar .filter-group { width: 100%; }
+  .campagnes-filters-bar .reset-btn { width: 100%; text-align: left; }
+  /* Same 44px tap-target floor .filtres-sheet-body sets, same reason. */
+  .campagnes-filters-bar select,
+  .campagnes-filters-bar input { min-height: 44px; }
+}
+
+/* ── Campaign town combobox ─────────────────────────────────────────── */
+
+.town-filter { position: relative; min-width: 220px; }
+
+/* >>> THE .filter-group RULE ABOVE DOES NOT REACH THIS INPUT. <<< It
+   selects `select` and `input[type="search"]`. This one is type="text"
+   (a search input renders a browser clear-button that fights the
+   combobox's own clear row), so it inherits nothing and needs the same
+   values spelled out. Copied from that rule, not approximated. */
+.town-filter input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  font-size: var(--t-small);
+  color: var(--ink);
+  background: #fff;
+}
+/* Focus is already covered: .filter-group input:focus-visible matches. */
+
+/* Deliberately the same shape as .commune-autocomplete-popover and its
+   list. Two comboboxes live on this one screen -- this in the filter bar,
+   that in the Nouvelle campagne modal -- and making them look different
+   would read as two unrelated controls. Not inside a modal, so z-index 40
+   rather than that one's 200: above the cards, below the modal (100) and
+   the drawers (200/300). */
+.town-filter-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 20, 24, .16);
+}
+.town-filter-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 13.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* ONE highlight class for hover and keyboard both -- two visible at once
+   is how someone loses track of what Enter will pick. */
+.town-filter-list li.active { background: var(--wash); }
+.town-filter-list li[aria-selected="true"] { font-weight: 600; }
+.town-filter-list .mono-num { color: var(--ink-faint); font-size: 12px; }
+.town-filter-empty { cursor: default; color: var(--ink-faint); font-style: italic; }

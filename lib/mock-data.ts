@@ -4630,6 +4630,111 @@ const CAMPAIGN_SELECT = `
 // width without scrolling. Prospects uses 50 because it is a dense table.
 export const DEFAULT_CAMPAIGN_PAGE_SIZE = 12;
 
+// -- Campaign list filters [2026-10-22] ---------------------------------
+//
+// THREE FILTERS, TWO MECHANISMS.
+//
+// keyword and codeInsee are columns on child tables and filter in the
+// query itself, so totalCount and pagination stay honest.
+//
+// status is NOT a column. display_status is COMPUTED by campaign_status()
+// and campaigns.status disagrees with it on nearly every row -- measured
+// 2026-10-22, the stored column read 'completed' on all 59 campaigns
+// while the badge read 'En cours' on 57. Filtering the column would
+// resurrect the bug #55c removed. See fetchCampaignsOverview below for
+// how it is applied instead.
+export type CampaignFilters = {
+  keyword: string; // 'tous', or a campaign_keywords.keyword value
+  codeInsee: string; // 'toutes', or a communes.code_insee -- NEVER the name (KU-71)
+  status: 'tous' | DisplayStatus;
+};
+
+export const DEFAULT_CAMPAIGN_FILTERS: CampaignFilters = {
+  keyword: 'tous',
+  codeInsee: 'toutes',
+  status: 'tous',
+};
+
+export type CampaignTownOption = {
+  code_insee: string;
+  nom: string;
+  dept_code: string;
+};
+
+// >>> THE DROPDOWNS LIST WHAT THE AGENCY ACTUALLY HAS. <<< Not every
+// keyword in the product, not all 34,746 communes of France -- a filter
+// that offers a value returning zero rows is worse than no filter.
+//
+// One row per campaign, verified 2026-10-22: exactly one keyword and
+// exactly one active commune per campaign, zero exceptions across 59. No
+// DISTINCT in PostgREST, so dedupe client-side -- same shape as
+// getAvailableKeywords on the prospects page. RLS scopes both; no
+// agency_id is passed or wanted.
+export async function getAvailableCampaignKeywords(): Promise<string[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('campaign_keywords').select('keyword');
+  if (error) {
+    console.error('getAvailableCampaignKeywords query failed', error);
+    return [];
+  }
+  return Array.from(new Set((data as { keyword: string }[]).map((r) => r.keyword))).sort();
+}
+
+export async function getAvailableCampaignTowns(): Promise<CampaignTownOption[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('campaign_communes')
+    .select('code_insee, communes ( nom, dept_code )')
+    .eq('status', 'active');
+  if (error) {
+    console.error('getAvailableCampaignTowns query failed', error);
+    return [];
+  }
+  // Keyed by code_insee, not by name: 3,774 communes share a name, and
+  // two campaigns in two different Sainte-Colombe must not collapse into
+  // one dropdown entry that filters to the wrong town.
+  const byCode = new Map<string, CampaignTownOption>();
+  for (const r of (data as any[]) ?? []) {
+    if (r.communes == null) continue;
+    byCode.set(r.code_insee, {
+      code_insee: r.code_insee,
+      nom: r.communes.nom,
+      dept_code: r.communes.dept_code,
+    });
+  }
+  return Array.from(byCode.values()).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+}
+
+// !inner is applied ONLY to the relation actually being filtered, and
+// this is why it is built per-call rather than being a constant.
+//
+// On a plain (left) embed, PostgREST filters the EMBEDDED ARRAY and keeps
+// the parent row with an empty one -- so .eq('campaign_keywords.keyword',
+// x) on the existing CAMPAIGN_SELECT would return every campaign and
+// silently filter nothing. Making both inner unconditionally would fix
+// that and break something else: a campaign scoped by REGION rather than
+// commune has no campaign_communes row at all and would vanish from the
+// list. None exist today (checked 2026-10-22, 0 campaigns with no active
+// commune) but mapCampaignRow still carries the fallback branch for them,
+// and a list that quietly drops rows is the worst failure this screen
+// has.
+function campaignSelect(f: CampaignFilters): string {
+  const kw =
+    f.keyword !== 'tous'
+      ? 'campaign_keywords!inner ( keyword )'
+      : 'campaign_keywords ( keyword )';
+  const cc =
+    f.codeInsee !== 'toutes'
+      ? 'campaign_communes!inner ( code_insee, status, communes ( code_insee, nom, slug, dept_code, region_name, population ) )'
+      : 'campaign_communes ( code_insee, status, communes ( code_insee, nom, slug, dept_code, region_name, population ) )';
+  return `
+  id, status, total_grids, completed_grids, created_at, completed_at,
+  ${kw},
+  ${cc},
+  campaign_regions ( region_name, status )
+`;
+}
+
 // >>> PAGINATED, AND THE STATUS MAP COMES BACK WITH IT. <<< [2026-10-16]
 // Three separate problems, all on this one load:
 //   1. no limit on the campaigns query;
@@ -4645,6 +4750,7 @@ export const DEFAULT_CAMPAIGN_PAGE_SIZE = 12;
 export async function fetchCampaignsOverview(params?: {
   page?: number;
   pageSize?: number;
+  filters?: CampaignFilters;
 }): Promise<{
   campaigns: Campaign[];
   planUsage: AgencyPlanUsage;
@@ -4654,16 +4760,75 @@ export async function fetchCampaignsOverview(params?: {
   const supabase = createClient();
   const page = params?.page ?? 1;
   const pageSize = params?.pageSize ?? DEFAULT_CAMPAIGN_PAGE_SIZE;
+  const filters = params?.filters ?? DEFAULT_CAMPAIGN_FILTERS;
   const from = (page - 1) * pageSize;
+
+  // >>> STATUS IS NOT A COLUMN, SO IT CANNOT BE A WHERE. <<< [2026-10-22]
+  // display_status is computed by campaign_status(). campaigns.status is
+  // the stored value that flips to 'completed' the moment the SCAN
+  // finishes, four stages early -- measured 2026-10-22, 'completed' on
+  // all 59 rows while the badge read 'En cours' on 57 of them. Filtering
+  // the column would put back exactly what #55c removed.
+  //
+  // So the filter resolves against the SAME map the badges read, and is
+  // applied as an id set. This costs ONE extra round trip and ONLY when a
+  // status filter is on: with 'tous' the original two-round shape below
+  // is untouched.
+  // >>> THE RICH MAP, NOT THE BARE ONE. <<< fetchCampaignStatuses returns
+  // CampaignStageStatus PLUS delivered / total / scanned / sites… , and
+  // the mapCampaignRow call at the foot of this function reads
+  // `.delivered`. Declaring this as Record<string, CampaignStageStatus>
+  // made the ternary in the Promise.all below widen to that narrower
+  // type and lose it. Derived from the function itself so it cannot
+  // drift again if that return shape changes.
+  let preStatuses: Awaited<ReturnType<typeof fetchCampaignStatuses>> | null = null;
+  let idFilter: string[] | null = null;
+  if (filters.status !== 'tous') {
+    preStatuses = await fetchCampaignStatuses();
+    idFilter = Object.values(preStatuses)
+      .filter((s) => s.displayStatus === filters.status)
+      .map((s) => s.campaignId);
+    // .in('id', []) renders as id=in.() -- a PostgREST SYNTAX ERROR, not
+    // an empty result. Answered here instead, or the screen would show a
+    // failed query where it should show "no matches".
+    if (idFilter.length === 0) {
+      return {
+        campaigns: [],
+        planUsage: await fetchAgencyPlanUsage(),
+        statuses: preStatuses,
+        totalCount: 0,
+      };
+    }
+    // ~37 characters per uuid in the URL. Safe to roughly 200 matching
+    // campaigns; past that this passes the request-line ceiling -- the
+    // same wall the gbp_siblings release PATCH hit -- and the fix is a
+    // p_display_status argument on campaign_status(), which is a database
+    // change and deliberately not made here.
+  }
 
   // No agency_id filter -- RLS scopes this to the current agency.
   // .order('id') is the deterministic tiebreaker, same reason as
   // applyProspectSort: two campaigns created in the same instant can
   // otherwise land in a different order per page, so one appears twice
   // and another never appears at all.
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('campaigns')
-    .select(CAMPAIGN_SELECT, { count: 'exact' })
+    .select(campaignSelect(filters), { count: 'exact' });
+
+  if (idFilter !== null) query = query.in('id', idFilter);
+  if (filters.keyword !== 'tous') {
+    query = query.eq('campaign_keywords.keyword', filters.keyword);
+  }
+  if (filters.codeInsee !== 'toutes') {
+    // status='active' alongside the code: zero inactive rows exist today
+    // (checked 2026-10-22) but add_campaign_keyword and prospect_view
+    // both read active-only, and this is the third reader.
+    query = query
+      .eq('campaign_communes.code_insee', filters.codeInsee)
+      .eq('campaign_communes.status', 'active');
+  }
+
+  const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .order('id')
     .range(from, from + pageSize - 1);
@@ -4678,7 +4843,8 @@ export async function fetchCampaignsOverview(params?: {
       supabase,
       rows.map((r) => r.id),
     ),
-    fetchCampaignStatuses(),
+    // Already in hand when a status filter ran -- never asked twice.
+    preStatuses !== null ? Promise.resolve(preStatuses) : fetchCampaignStatuses(),
     fetchAgencyPlanUsage(),
   ]);
 

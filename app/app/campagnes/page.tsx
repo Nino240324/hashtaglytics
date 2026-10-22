@@ -9,15 +9,21 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   createCampaign,
   fetchCampaignsOverview,
+  getAvailableCampaignKeywords,
+  getAvailableCampaignTowns,
   DEFAULT_CAMPAIGN_PAGE_SIZE,
+  DEFAULT_CAMPAIGN_FILTERS,
   completionPct,
   type AgencyPlanUsage,
   type Campaign,
+  type CampaignFilters,
   type CampaignStageStatus,
+  type CampaignTownOption,
   type Commune,
   type DisplayStatus,
 } from '@/lib/mock-data';
 import { CommuneAutocomplete } from '../_components/commune-autocomplete';
+import { CampaignTownFilter } from '../_components/campaign-town-filter';
 import { Modal } from '../_components/modal';
 import { LeadQuotaStat } from '../_components/lead-quota-stat';
 
@@ -152,9 +158,23 @@ export default function CampagnesPage() {
   // only inside an effect -- same reason as the prospects page: content
   // gated on it is never part of React's hydration comparison.
   const [hasLoaded, setHasLoaded] = useState(false);
-  // Latest-request-wins: clicking through pages quickly must not let an
-  // older in-flight response overwrite a newer one.
+    // Latest-request-wins: clicking through pages quickly must not let an
+  // older in-flight response overwrite a newer one. Now carries the
+  // filters too -- changing a dropdown and immediately changing another
+  // is the same race as clicking page 3 then page 4.
   const requestIdRef = useRef(0);
+
+  // [2026-10-22] Three filters. Dropdown contents come from the agency's
+  // OWN campaigns, fetched once on mount -- see
+  // getAvailableCampaignTowns for why not CommuneAutocomplete.
+  const [filters, setFilters] = useState<CampaignFilters>(DEFAULT_CAMPAIGN_FILTERS);
+  const [keywordOptions, setKeywordOptions] = useState<string[]>([]);
+  const [townOptions, setTownOptions] = useState<CampaignTownOption[]>([]);
+
+  useEffect(() => {
+    getAvailableCampaignKeywords().then(setKeywordOptions);
+    getAvailableCampaignTowns().then(setTownOptions);
+  }, []);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [keywordInput, setKeywordInput] = useState('');
@@ -178,6 +198,7 @@ export default function CampagnesPage() {
       const result = await fetchCampaignsOverview({
         page,
         pageSize: DEFAULT_CAMPAIGN_PAGE_SIZE,
+        filters,
       });
       if (requestId !== requestIdRef.current) return; // a newer request started
       setCampaigns(result.campaigns);
@@ -185,10 +206,10 @@ export default function CampagnesPage() {
       setStatuses(result.statuses);
       setTotalCount(result.totalCount);
       setHasLoaded(true);
-    } finally {
+        } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [page]);
+  }, [page, filters]);
 
   useEffect(() => {
     load();
@@ -199,9 +220,29 @@ export default function CampagnesPage() {
   // falls back to the stored column -- the same slightly-early "Terminée"
   // this screen showed before today. That is wrong but familiar; a blank
   // badge, or a card that refuses to render, would be worse.
-  function displayStatusOf(c: Campaign): DisplayStatus {
+    function displayStatusOf(c: Campaign): DisplayStatus {
     return statuses[c.id]?.displayStatus ?? c.status;
   }
+
+  // Page 1, always. Staying on page 4 while narrowing to three results
+  // shows an empty grid and a pagination strip that disagrees with it.
+  function setFilter<K extends keyof CampaignFilters>(key: K, value: CampaignFilters[K]) {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setPage(1);
+  }
+
+  function resetFilters() {
+    setFilters(DEFAULT_CAMPAIGN_FILTERS);
+    setPage(1);
+  }
+
+  // >>> TELLS THE TWO EMPTY STATES APART. <<< The prospects page needed a
+  // separate unfiltered query for this (hasAnyProspectsEver); here it is
+  // free. The dropdowns are built FROM the agency's own campaigns, so an
+  // agency with none has empty dropdowns and cannot set a filter at all
+  // -- filtersActive therefore implies campaigns exist.
+  const filtersActive =
+    filters.keyword !== 'tous' || filters.codeInsee !== 'toutes' || filters.status !== 'tous';
 
   // Change 1: this client-side check is a COURTESY, not the guarantee.
   // The real enforcement is a BEFORE INSERT trigger on campaigns that
@@ -367,7 +408,68 @@ export default function CampagnesPage() {
             + Nouvelle campagne
           </button>
         )}
-      </div>
+        </div>
+
+      {/* >>> STACKED ON MOBILE, NOT A SHEET. <<< [2026-10-22] The
+          prospects page opens a bottom sheet because it carries eight
+          filters; three stack without crowding anything, and copying it
+          would mean extracting FiltresSheet out of a shipped file for no
+          gain. The only new CSS is the stacking rule.
+
+          Hidden entirely when there is nothing to filter -- an agency
+          with no campaigns would otherwise get an empty control bar
+          sitting on top of its empty state. */}
+      {hasLoaded && (keywordOptions.length > 0 || townOptions.length > 0) && (
+        <div className="filters-bar campagnes-filters-bar">
+          <div className="filter-group">
+            <label htmlFor="f-campaign-keyword">Mot-clé</label>
+            <select
+              id="f-campaign-keyword"
+              value={filters.keyword}
+              onChange={(e) => setFilter('keyword', e.target.value)}
+            >
+              <option value="tous">Tous les mots-clés</option>
+              {keywordOptions.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <CampaignTownFilter
+            id="f-campaign-town"
+            towns={townOptions}
+            value={filters.codeInsee}
+            onChange={(code) => setFilter('codeInsee', code)}
+          />
+
+          {/* The SAME six labels the badges use, from the same object --
+              a filter offering a seventh name, or missing one, would be a
+              filter for a status the screen never shows. */}
+          <div className="filter-group">
+            <label htmlFor="f-campaign-status">Statut</label>
+            <select
+              id="f-campaign-status"
+              value={filters.status}
+              onChange={(e) => setFilter('status', e.target.value as CampaignFilters['status'])}
+            >
+              <option value="tous">Tous les statuts</option>
+              {(Object.keys(STATUS_LABELS) as DisplayStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {filtersActive && (
+            <button type="button" className="reset-btn" onClick={resetFilters}>
+              Réinitialiser les filtres
+            </button>
+          )}
+        </div>
+      )}
 
       {/* !hasLoaded, not loading: "Chargement…" belongs to the FIRST load
           only. On a page change the cards stay put and dim, instead of the
@@ -376,7 +478,19 @@ export default function CampagnesPage() {
           not "this agency has no campaigns". */}
       {!hasLoaded ? (
         <p className="loading-text">Chargement…</p>
-      ) : totalCount === 0 ? (
+            ) : totalCount === 0 ? (
+        /* TWO DIFFERENT NOTHINGS. "You have no campaigns" and "these
+           filters match none of your 59 campaigns" are not the same
+           sentence, and the first one offered to an agency that owns 59
+           reads as data loss. */
+        filtersActive ? (
+          <div className="empty-state">
+            <p>Aucune campagne ne correspond à ces filtres.</p>
+            <button type="button" className="btn btn-ghost" onClick={resetFilters}>
+              Réinitialiser les filtres
+            </button>
+          </div>
+        ) : (
         <div className="empty-state campaigns-empty-state">
           <h2>Aucune campagne pour l&rsquo;instant.</h2>
           {planUsage?.tierName === 'free' ? (
@@ -390,10 +504,11 @@ export default function CampagnesPage() {
               prospects qualifiés en quelques minutes.
             </p>
           )}
-          <button type="button" className="btn btn-primary" onClick={() => setModalOpen(true)}>
+        <button type="button" className="btn btn-primary" onClick={() => setModalOpen(true)}>
             + Créer ma première campagne
           </button>
         </div>
+        )
       ) : (
         <>
         <div
