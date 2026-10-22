@@ -432,7 +432,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
               count is unavailable -- printing 0 would say we scanned
               a town and found nobody. */}
               <span className="mono-num scan-businesses">
-                {progress.businesses === null ? '—' : progress.businesses} entreprises unique trouvées
+                {progress.businesses === null ? '—' : progress.businesses} entreprises trouvées
               </span>
             </div>
           </div>
