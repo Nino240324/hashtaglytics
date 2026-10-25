@@ -330,7 +330,24 @@ export function CampaignDetailClient({ campaignId }: { campaignId: string }) {
   }
 
   const stage = progress.stage;
-  const scanPct = progress.total > 0 ? Math.round((progress.scanned / progress.total) * 100) : 0;
+    // >>> 100% MEANS COMPLETE, AND NOTHING ELSE PRINTS 100%. <<< [task 68]
+  // Math.round alone crosses to 100 at 99.5%, so any campaign with 200+
+  // campaign_grids rows (one row per grid point x active keyword) prints
+  // "100%" with points still unscanned, while the Balayage tick stays
+  // open — scanDone is scanned >= total and does not round. Paris at 142
+  // points x one keyword cannot reach it; two keywords over the same
+  // commune can, and a Growth order will.
+  //
+  // A CLAMP, NOT Math.floor. floor fixes the ceiling and breaks the
+  // floor: floor(1/142 * 100) is 0, so the first scanned point would
+  // read "1 / 142 points balayés (0%)" with an empty bar. round is
+  // correct there and wrong only at the top, so only the top moves.
+  const scanPct =
+    progress.total > 0
+      ? progress.scanned >= progress.total
+        ? 100
+        : Math.min(99, Math.round((progress.scanned / progress.total) * 100))
+      : 0;
   const phase1 = progress.scanned === 0;
 
   // ONE source, shared with the campaign list. campaigns.status is not
