@@ -4,12 +4,40 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const successRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
-  // TODO: wire this to a real handler (email service, edge function, or form backend)
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSubmitted(true);
+    if (sending) return;
+
+    // Read the form BEFORE the first await. React pools the synthetic event,
+    // so e.currentTarget is null by the time the fetch resolves.
+    const data = new FormData(e.currentTarget);
+
+    setSending(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.get('name'),
+          email: data.get('email'),
+          message: data.get('message'),
+          company: data.get('company'), // honeypot -- see the route handler
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error ?? "L'envoi a échoué.");
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "L'envoi a échoué.");
+      setSending(false);
+    }
   }
 
   // Submitting replaces the whole form with the success message -- the
@@ -19,6 +47,13 @@ export default function ContactPage() {
   useEffect(() => {
     if (submitted) successRef.current?.focus();
   }, [submitted]);
+
+  // A failure leaves the form in place, so focus is still on the button. The
+  // error appears above it, where focus will never travel on its own.
+  // role="alert" announces it; moving focus is what lets them reach it.
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   return (
     <section className="contact">
@@ -41,6 +76,17 @@ export default function ContactPage() {
           </div>
         ) : (
           <form className="contact-form" onSubmit={handleSubmit}>
+            {error && (
+              <p
+                ref={errorRef}
+                tabIndex={-1}
+                role="alert"
+                style={{ marginBottom: 16, color: 'var(--danger, #c0392b)', fontWeight: 600 }}
+              >
+                {error}
+              </p>
+            )}
+
             <div className="field">
               <label htmlFor="name">Nom</label>
               <input
@@ -70,8 +116,35 @@ export default function ContactPage() {
                 placeholder="Votre métier, votre zone, votre question…"
               />
             </div>
-            <button type="submit" className="btn btn-primary">
-              Envoyer
+
+            {/*
+              Honeypot. Hidden from sight AND from assistive technology, and
+              out of the tab order, so no human reaches it -- which is the
+              whole point: anything in it came from a bot. Do not swap this
+              for display:none; some bots skip those fields.
+            */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                width: 1,
+                height: 1,
+                overflow: 'hidden',
+                clip: 'rect(0 0 0 0)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <label htmlFor="company">Société</label>
+              <input id="company" name="company" type="text" tabIndex={-1} autoComplete="off" />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={sending}
+              aria-busy={sending}
+            >
+              {sending ? 'Envoi…' : 'Envoyer'}
             </button>
           </form>
         )}

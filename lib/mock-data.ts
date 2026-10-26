@@ -4078,15 +4078,19 @@ export async function getAvailableCities(): Promise<string[]> {
 // "St-Etienne" finds it. Always resolves to code_insee -- the caller must
 // never submit the name (slug is NOT unique, brief 5.2 / DDD KU-71).
 
-function normaliseQuery(q: string): string {
-  return q
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // strip accents
-    .replace(/^st-/, 'saint-')
-    .replace(/^ste-/, 'sainte-');
-}
+// -- Commune autocomplete -------------------------------------------------
+//
+// NO NORMALISATION HERE, DELIBERATELY. search_communes does all of it in
+// SQL: separators to '-', accents stripped, st- -> saint- anchored on a
+// word boundary, edge hyphens trimmed (MIGRATION 13, 2026-10-25). This
+// file used to carry a normaliseQuery() that did part of the same job and
+// was never called -- searchCommunes has always sent query.trim() straight
+// to the RPC. Deleted rather than wired up: two normalisers would have to
+// stay byte-identical forever, and the first divergence shows up as a town
+// the form cannot find and the database can.
+// Still resolves to code_insee -- the caller must NEVER submit the name
+// (slug is not unique; brief 5.2 / DDD KU-71).
+// NOT handled by the database either: ste- -> sainte- (tracker row 176).
 
 export type CommuneSearchResult = {
   results: Commune[];

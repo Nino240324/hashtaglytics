@@ -1,0 +1,481 @@
+app\(site)\(auth)\inscription\page - inscription.tsx:48:        signUpError.message.toLowerCase().includes('already registered')
+app\(site)\(auth)\inscription\page.tsx:48:        signUpError.message.toLowerCase().includes('already registered')
+app\(site)\(auth)\mot-de-passe-oublie\page.tsx:34:    // used to probe which addresses have accounts. Matches the message
+app\(site)\confidentialite\page - confidentialite.tsx:94:              n&rsquo;envoyons aucun message commercial aux entreprises
+app\(site)\confidentialite\page.tsx:94:              n&rsquo;envoyons aucun message commercial aux entreprises
+app\(site)\contact\page - Contact.tsx:27:              Message envoyé.
+app\(site)\contact\page - Contact.tsx:56:              <label htmlFor="message">Message</label>
+app\(site)\contact\page - Contact.tsx:58:                id="message"
+app\(site)\contact\page - Contact.tsx:59:                name="message"
+app\(site)\contact\page.tsx:15:  // Submitting replaces the whole form with the success message -- the
+app\(site)\contact\page.tsx:36:              Message envoyé.
+app\(site)\contact\page.tsx:65:              <label htmlFor="message">Message</label>
+app\(site)\contact\page.tsx:67:                id="message"
+app\(site)\contact\page.tsx:68:                name="message"
+app\app\campagnes\page - Campagnes.tsx:280:  // [NEW] The inline message. Deliberately NOT shown while the field is
+app\app\campagnes\page - Campagnes.tsx:331:        // a confirmation message first, since the user lands directly on
+app\app\campagnes\page - Campagnes.tsx:336:      // Shown verbatim -- the quota/limit messages are written in
+app\app\campagnes\page - Campagnes.tsx:338:      // displayed as-is, not replaced with a generic failure message.
+app\app\campagnes\page - Campagnes.tsx:339:      setConfirmation(result.message);
+app\app\campagnes\page.tsx:280:  // [NEW] The inline message. Deliberately NOT shown while the field is
+app\app\campagnes\page.tsx:331:        // a confirmation message first, since the user lands directly on
+app\app\campagnes\page.tsx:336:      // Shown verbatim -- the quota/limit messages are written in
+app\app\campagnes\page.tsx:338:      // displayed as-is, not replaced with a generic failure message.
+app\app\campagnes\page.tsx:339:      setConfirmation(result.message);
+app\app\parametres\page.tsx:103:  const [accountMessage, setAccountMessage] = useState<string | null>(null);
+app\app\parametres\page.tsx:112:  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+app\app\parametres\page.tsx:119:  const [brandMessage, setBrandMessage] = useState<string | null>(null);
+app\app\parametres\page.tsx:155:    setAccountMessage(null);
+app\app\parametres\page.tsx:169:      setAccountError(nameError.message);
+app\app\parametres\page.tsx:175:      setAccountMessage('Enregistré.');
+app\app\parametres\page.tsx:181:      setAccountError(emailError.message);
+app\app\parametres\page.tsx:188:    setAccountMessage(
+app\app\parametres\page.tsx:199:    setPasswordMessage(null);
+app\app\parametres\page.tsx:228:      setPasswordError(error.message);
+app\app\parametres\page.tsx:231:    setPasswordMessage('Mot de passe modifié.');
+app\app\parametres\page.tsx:288:    setBrandMessage(null);
+app\app\parametres\page.tsx:305:      setBrandError(result.message);
+app\app\parametres\page.tsx:308:    setBrandMessage(result.message);
+app\app\parametres\page.tsx:360:                {accountMessage && <p className="settings-stub-note">{accountMessage}</p>}
+app\app\parametres\page.tsx:403:                {passwordMessage && <p className="settings-stub-note">{passwordMessage}</p>}
+app\app\parametres\page.tsx:501:                    {brandMessage && <p className="settings-stub-note">{brandMessage}</p>}
+app\app\prospects\page - Prospects.tsx:1082:      setPdfError((prev) => ({ ...prev, [key]: result.message }));
+app\app\prospects\page.tsx:1082:      setPdfError((prev) => ({ ...prev, [key]: result.message }));
+app\layout.tsx:60:  // copy, so there's one consistent message regardless of where the
+components\ui\form.tsx:62:    formMessageId: `${id}-form-item-message`,
+components\ui\form.tsx:110:  const { error, formItemId, formDescriptionId, formMessageId } =
+components\ui\form.tsx:120:          : `${formDescriptionId} ${formMessageId}`
+components\ui\form.tsx:146:const FormMessage = React.forwardRef<
+components\ui\form.tsx:150:  const { error, formMessageId } = useFormField();
+components\ui\form.tsx:151:  const body = error ? String(error?.message) : children;
+components\ui\form.tsx:160:      id={formMessageId}
+components\ui\form.tsx:168:FormMessage.displayName = 'FormMessage';
+components\ui\form.tsx:177:  FormMessage,
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:19:      errorMessage: { minLength: USERNAME_REQUIRED_MESSAGE },
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:24:      errorMessage: { minLength: PASSWORD_REQUIRED_MESSAGE },
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:61:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:68:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:88:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:93:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:16:      errorMessage: { minLength: 'username field is required' },
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:21:      errorMessage: { minLength: 'password field is required' },
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:44:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:47:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:45:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:52:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:59:  expect(usernameField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:66:  expect(passwordField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:76:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:81:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\arktype\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:46:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:53:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:60:  expect(usernameField.validationMessage).toBe('username should not be empty');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:65:  expect(passwordField.validationMessage).toBe('password should not be empty');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:73:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:78:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form.tsx:32:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\class-validator\src\__tests__\Form.tsx:35:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:12:  username: string.min(2).error(USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:13:  password: string.min(2).error(PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\computed-types\src\__tests__\Form.tsx:41:        <span role="alert">{errors.address.zipCode.message}</span>
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:13:    Schema.nonEmptyString({ message: () => USERNAME_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:16:    Schema.nonEmptyString({ message: () => PASSWORD_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:55:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:62:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:69:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:74:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:82:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:87:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:13:    Schema.nonEmptyString({ message: () => USERNAME_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:16:    Schema.nonEmptyString({ message: () => PASSWORD_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:38:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:41:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:19:      .withMessage('username is a required field');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:22:      .withMessage('password is a required field');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:42:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:45:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:9:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:10:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:13:  username: tt.withMessage(tt.NonEmptyString, () => USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:14:  password: tt.withMessage(tt.NonEmptyString, () => PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:52:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:59:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:66:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:71:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:10:  username: tt.withMessage(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:14:  password: tt.withMessage(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:42:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:45:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:69:  expect(passwordField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\joi\src\__tests__\Form.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:12:  username: Nope.string().required(USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:13:  password: Nope.string().required(PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:52:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:59:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:66:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:71:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form.tsx:35:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\nope\src\__tests__\Form.tsx:38:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:45:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:52:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:59:  expect(usernameField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:66:  expect(passwordField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:76:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:81:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\superstruct\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:8:const ERROR_MESSAGE =
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:52:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:59:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:66:  expect(usernameField.validationMessage).toBe(ERROR_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:71:  expect(passwordField.validationMessage).toBe(ERROR_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form.tsx:35:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typanion\src\__tests__\Form.tsx:38:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-compiler.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-compiler.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:49:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:56:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:63:  expect(usernameField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:70:  expect(passwordField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:80:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:85:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:46:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:53:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:60:  expect(usernameField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:77:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:82:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typebox\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:9:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:10:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:13:  username: z.string().min(1, { message: USERNAME_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:14:  password: z.string().min(1, { message: PASSWORD_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:49:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:56:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:63:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:68:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:76:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:81:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:10:  username: z.string().min(1, { message: 'username field is required' }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:11:  password: z.string().min(1, { message: 'password field is required' }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:32:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:35:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is v.required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is v.required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:13:    v.string(USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:14:    v.minLength(2, USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:17:    v.string(PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:18:    v.minLength(2, PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:54:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:61:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:68:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:73:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:13:    v.string(USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:14:    v.minLength(2, USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:17:    v.string(PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:18:    v.minLength(2, PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:40:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:43:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_SYMBOL_MESSAGE = 'password must contain a symbol';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:17:  vest.test('username', USERNAME_REQUIRED_MESSAGE, () => {
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:21:  vest.test('password', PASSWORD_SYMBOL_MESSAGE, () => {
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:56:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:63:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:70:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:75:  expect(passwordField.validationMessage).toBe(PASSWORD_SYMBOL_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:83:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:88:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form.tsx:39:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vest\src\__tests__\Form.tsx:42:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:69:  expect(passwordField.validationMessage).toBe(
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\vine\src\__tests__\Form.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:12:  username: Yup.string().required(USERNAME_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:13:  password: Yup.string().required(PASSWORD_REQUIRED_MESSAGE),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\yup\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:12:  username: z.string().nonempty({ message: USERNAME_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:13:  password: z.string().nonempty({ message: PASSWORD_REQUIRED_MESSAGE }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:9:  username: z.string().nonempty({ message: 'username field is required' }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:10:  password: z.string().nonempty({ message: 'password field is required' }),
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\.pnpm\@hookform+resolvers@3.10.0__0859deb2fc7694e6fca1f160f123f857\node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:19:      errorMessage: { minLength: USERNAME_REQUIRED_MESSAGE },
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:24:      errorMessage: { minLength: PASSWORD_REQUIRED_MESSAGE },
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:61:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:68:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:88:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form-native-validation.tsx:93:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:16:      errorMessage: { minLength: 'username field is required' },
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:21:      errorMessage: { minLength: 'password field is required' },
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:44:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\ajv\src\__tests__\Form.tsx:47:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:45:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:52:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:59:  expect(usernameField.validationMessage).toBe(
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:66:  expect(passwordField.validationMessage).toBe(
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:76:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form-native-validation.tsx:81:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\arktype\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:46:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:53:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:60:  expect(usernameField.validationMessage).toBe('username should not be empty');
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:65:  expect(passwordField.validationMessage).toBe('password should not be empty');
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:73:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form-native-validation.tsx:78:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form.tsx:32:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\class-validator\src\__tests__\Form.tsx:35:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:12:  username: string.min(2).error(USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:13:  password: string.min(2).error(PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\computed-types\src\__tests__\Form.tsx:41:        <span role="alert">{errors.address.zipCode.message}</span>
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:13:    Schema.nonEmptyString({ message: () => USERNAME_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:16:    Schema.nonEmptyString({ message: () => PASSWORD_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:55:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:62:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:69:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:74:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:82:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form-native-validation.tsx:87:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:13:    Schema.nonEmptyString({ message: () => USERNAME_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:16:    Schema.nonEmptyString({ message: () => PASSWORD_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:38:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\effect-ts\src\__tests__\Form.tsx:41:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:20:    this.ruleFor('username').notEmpty().withMessage(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:21:    this.ruleFor('password').notEmpty().withMessage(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:55:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:62:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:69:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:74:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:82:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form-native-validation.tsx:87:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:19:      .withMessage('username is a required field');
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:22:      .withMessage('password is a required field');
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:42:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\fluentvalidation-ts\src\__tests__\Form.tsx:45:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:9:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:10:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:13:  username: tt.withMessage(tt.NonEmptyString, () => USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:14:  password: tt.withMessage(tt.NonEmptyString, () => PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:52:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:59:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:66:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:71:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:10:  username: tt.withMessage(
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:14:  password: tt.withMessage(
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:42:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\io-ts\src\__tests__\Form.tsx:45:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(
+node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:69:  expect(passwordField.validationMessage).toBe(
+node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\joi\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\joi\src\__tests__\Form.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\joi\src\__tests__\Form.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:12:  username: Nope.string().required(USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:13:  password: Nope.string().required(PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:52:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:59:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:66:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:71:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\nope\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\nope\src\__tests__\Form.tsx:35:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\nope\src\__tests__\Form.tsx:38:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:45:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:52:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:59:  expect(usernameField.validationMessage).toBe(
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:66:  expect(passwordField.validationMessage).toBe(
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:76:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form-native-validation.tsx:81:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\superstruct\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:8:const ERROR_MESSAGE =
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:52:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:59:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:66:  expect(usernameField.validationMessage).toBe(ERROR_MESSAGE);
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:71:  expect(passwordField.validationMessage).toBe(ERROR_MESSAGE);
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form.tsx:35:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\typanion\src\__tests__\Form.tsx:38:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-compiler.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-compiler.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:49:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:56:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:63:  expect(usernameField.validationMessage).toBe(
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:70:  expect(passwordField.validationMessage).toBe(
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:80:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation-compiler.tsx:85:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:46:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:53:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:60:  expect(usernameField.validationMessage).toBe(
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:77:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form-native-validation.tsx:82:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\typebox\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:9:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:10:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:13:  username: z.string().min(1, { message: USERNAME_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:14:  password: z.string().min(1, { message: PASSWORD_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:49:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:56:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:63:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:68:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:76:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form-native-validation.tsx:81:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:10:  username: z.string().min(1, { message: 'username field is required' }),
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:11:  password: z.string().min(1, { message: 'password field is required' }),
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:32:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\typeschema\src\__tests__\Form.tsx:35:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is v.required';
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is v.required';
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:13:    v.string(USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:14:    v.minLength(2, USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:17:    v.string(PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:18:    v.minLength(2, PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:54:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:61:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:68:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:73:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:13:    v.string(USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:14:    v.minLength(2, USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:17:    v.string(PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:18:    v.minLength(2, PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:40:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\valibot\src\__tests__\Form.tsx:43:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_SYMBOL_MESSAGE = 'password must contain a symbol';
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:17:  vest.test('username', USERNAME_REQUIRED_MESSAGE, () => {
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:21:  vest.test('password', PASSWORD_SYMBOL_MESSAGE, () => {
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:56:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:63:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:70:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:75:  expect(passwordField.validationMessage).toBe(PASSWORD_SYMBOL_MESSAGE);
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:83:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vest\src\__tests__\Form-native-validation.tsx:88:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vest\src\__tests__\Form.tsx:39:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\vest\src\__tests__\Form.tsx:42:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(
+node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:69:  expect(passwordField.validationMessage).toBe(
+node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:79:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vine\src\__tests__\Form-native-validation.tsx:84:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\vine\src\__tests__\Form.tsx:34:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\vine\src\__tests__\Form.tsx:37:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:12:  username: Yup.string().required(USERNAME_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:13:  password: Yup.string().required(PASSWORD_REQUIRED_MESSAGE),
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\yup\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\yup\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\yup\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:8:const USERNAME_REQUIRED_MESSAGE = 'username field is required';
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:9:const PASSWORD_REQUIRED_MESSAGE = 'password field is required';
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:12:  username: z.string().nonempty({ message: USERNAME_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:13:  password: z.string().nonempty({ message: PASSWORD_REQUIRED_MESSAGE }),
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:48:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:55:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:62:  expect(usernameField.validationMessage).toBe(USERNAME_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:67:  expect(passwordField.validationMessage).toBe(PASSWORD_REQUIRED_MESSAGE);
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:75:  expect(usernameField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\zod\src\__tests__\Form-native-validation.tsx:80:  expect(passwordField.validationMessage).toBe('');
+node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:9:  username: z.string().nonempty({ message: 'username field is required' }),
+node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:10:  password: z.string().nonempty({ message: 'password field is required' }),
+node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:31:      {errors.username && <span role="alert">{errors.username.message}</span>}
+node_modules\@hookform\resolvers\zod\src\__tests__\Form.tsx:34:      {errors.password && <span role="alert">{errors.password.message}</span>}

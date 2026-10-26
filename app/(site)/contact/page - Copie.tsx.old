@@ -1,15 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const successRef = useRef<HTMLDivElement>(null);
 
   // TODO: wire this to a real handler (email service, edge function, or form backend)
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitted(true);
   }
+
+  // Submitting replaces the whole form with the success message -- the
+  // button that had focus is removed from the DOM entirely, and without
+  // this, focus would simply fall back to <body> with nothing telling a
+  // screen reader user that anything happened at all.
+  useEffect(() => {
+    if (submitted) successRef.current?.focus();
+  }, [submitted]);
 
   return (
     <section className="contact">
@@ -22,7 +31,7 @@ export default function ContactPage() {
         </p>
 
         {submitted ? (
-          <div className="contact-form">
+          <div className="contact-form" ref={successRef} tabIndex={-1} role="status">
             <p style={{ fontSize: 'var(--t-h3)', fontWeight: 600, color: 'var(--ok)' }}>
               Message envoyé.
             </p>
