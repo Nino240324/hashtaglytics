@@ -1020,21 +1020,27 @@ function ProspectsPageInner() {
   }, []);
 
   // Stable signal for "does this agency have ANY delivered prospects at
-  // all" -- fetched ONCE with DEFAULT_PROSPECT_FILTERS, deliberately
-  // never re-derived from the user's own current filter/search state.
-  // Distinguishes a genuinely empty agency (this stays false) from
-  // "filtered to zero results" (rows.length can hit 0 either way, but
-  // only this signal tells you which situation you're actually in).
+  // all". Set ONCE, from fetchHasAnyProspects in the effect further down
+  // -- deliberately never re-derived from the user's current filter or
+  // search state, or "filtered to zero results" would look identical to
+  // "this agency has never had any prospects".
+  //
+  // >>> THERE USED TO BE A SECOND WRITER HERE AND IT CAUSED THE BUG. <<<
+  // [2026-10-27] An effect on this line called fetchProspects with
+  // pageSize: 1 and set this from its totalCount. That request is the
+  // `GET prospect_view?…&limit=1` in the network panel, and it 500s:
+  // { count: 'exact' } made it two full evaluations of the view in one
+  // statement, 8,035 ms, past authenticator's 8-second statement_timeout.
+  // On failure totalCount fell back to 0, so this was set to FALSE --
+  // the one value that renders "Créez une campagne" -- to an agency
+  // holding 2,404 prospects, while the tab above it read 2404. The two
+  // effects raced, which is why a reload "fixed" it.
+  //
+  // Three states, and null is not false:
+  //   true  -- has prospects
+  //   false -- genuinely none, show the create-a-campaign card
+  //   null  -- not known yet, or the request failed. NEVER that card.
   const [hasAnyProspectsEver, setHasAnyProspectsEver] = useState<boolean | null>(null);
-  useEffect(() => {
-    fetchProspects({
-      filters: DEFAULT_PROSPECT_FILTERS,
-      tab: 'tous',
-      sort: DEFAULT_PROSPECT_SORT,
-      page: 1,
-      pageSize: 1,
-    }).then(({ totalCount }) => setHasAnyProspectsEver(totalCount > 0));
-  }, []);
 
   // Campaign scoping via ?campaign=<id> -- brief 5.4: "the same table,
   // filtered by campaign... a filter parameter, not a new screen."
@@ -1139,8 +1145,15 @@ function ProspectsPageInner() {
   // already settled and this is a plain client-side update, immune to
   // this whole bug class regardless of what the browser restored.
   const [hasLoaded, setHasLoaded] = useState(false);
+  // >>> A FAILED FETCH IS A THIRD STATE, NOT AN EMPTY LIST. <<<
+  // [2026-10-27] Without this, a dead request renders as "no prospects"
+  // and the customer is invited to create a campaign they already have
+  // -- and the natural next action is to create a duplicate and spend
+  // quota. An error that is visible is strictly better than a lie that
+  // is calm.
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  const load = useCallback(async () => {
+    const load = useCallback(async () => {
     const requestId = (requestIdRef.current += 1);
     setLoading(true);
     try {
@@ -1148,11 +1161,12 @@ function ProspectsPageInner() {
         fetchProspects({ filters, tab: activeTab, sort, page, pageSize: DEFAULT_PAGE_SIZE }),
         fetchProspectStatusCounts(filters),
       ]);
-      if (requestId !== requestIdRef.current) return; // a newer request has since started
+      if (requestId !== requestIdRef.current) return;
       setRows(page1.rows);
       setTotalCount(page1.totalCount);
       setTabCounts(counts);
-      setHasLoaded(true); // idempotent after the first real completion — never resets
+      setLoadFailed(page1.failed);        // <-- ONLY THIS LINE IS NEW
+      setHasLoaded(true);
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -1386,7 +1400,14 @@ function ProspectsPageInner() {
         cities={cities}
       />
 
-      {!loading && visibleRows.length === 0 ? (
+            {!loading && loadFailed ? (
+        <div className="empty-state" role="alert">
+          <p>Impossible de charger vos prospects pour le moment.</p>
+          <button type="button" className="btn btn-primary" onClick={() => load()}>
+            Réessayer
+          </button>
+        </div>
+      ) : !loading && visibleRows.length === 0 ? (
         hasAnyProspectsEver === false ? (
           <div className="empty-state">
             <p>

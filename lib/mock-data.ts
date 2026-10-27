@@ -3873,26 +3873,114 @@ function applyProspectSort(query: any, sort: ProspectSort) {
   return query.order(col, { ascending, nullsFirst }).order('id');
 }
 
+// >>> WHICH COLUMNS A FILTER SET ACTUALLY TOUCHES. <<< [2026-10-27]
+// outcome and delivered_at are columns on `leads`. keyword, city,
+// is_claimed, website_kind, email/email_status and business_name are NOT
+// -- they come from business_snapshots and businesses through
+// prospect_view's joins. So a count can be served by `leads` alone, in
+// milliseconds, whenever none of those six is active, which is every
+// default page load.
+//
+// measuredFrom / measuredTo are deliberately absent: they are applied
+// client-side to the fetched page (see ProspectFilters), never sent to
+// the database, so they do not change which table can answer a count.
+function usesViewOnlyFilters(f: ProspectFilters): boolean {
+  return (
+    f.keyword !== 'tous' ||
+    f.city !== 'toutes' ||
+    f.claim !== 'toutes' ||
+    f.website !== 'tous' ||
+    f.email !== 'tous' ||
+    f.search.trim() !== ''
+  );
+}
+
+// >>> THE COUNT IS A SEPARATE REQUEST NOW, AND THAT IS THE POINT. <<<
+// [2026-10-27] PostgREST answers { count: 'exact' } by evaluating the
+// same relation a SECOND time, unlimited, inside the same statement --
+// `WITH pgrst_source AS (... LIMIT n), pgrst_source_count AS (SELECT 1
+// FROM prospect_view) SELECT (SELECT count(*) FROM pgrst_source_count)`.
+// Measured 2026-10-27: the page 3.8 s + the count 3.4 s = 8,035 ms, past
+// authenticator's 8-second statement_timeout, and the whole request
+// returned 500. That is also why limit=1 cost exactly what limit=50 did
+// -- the count ignores the limit.
+//
+// Issued on its own it is a second request, not a second evaluation of
+// the same statement, so neither half approaches the cap. And when no
+// view-only filter is active it runs against `leads` instead:
+// leads_own_delivered scopes it, idx_leads_delivered (agency_id,
+// delivered_at DESC) serves it, and it is milliseconds.
+//
+// Returns null when the request FAILED, which is not the same as 0.
+async function countProspects(
+  supabase: ReturnType<typeof createClient>,
+  filters: ProspectFilters,
+  tab: ProspectStatusTab,
+): Promise<number | null> {
+  if (!usesViewOnlyFilters(filters)) {
+    let q = supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .not('delivered_at', 'is', null);
+    q = applyTabFilter(q, tab);
+    const { count, error } = await q;
+    if (error) {
+      console.error('countProspects: leads count failed', error);
+      return null;
+    }
+    return count ?? 0;
+  }
+
+  let q = supabase.from('prospect_view').select('id', { count: 'exact', head: true });
+  q = applyProspectFilters(q, filters);
+  q = applyTabFilter(q, tab);
+  const { count, error } = await q;
+  if (error) {
+    console.error('countProspects: prospect_view count failed', error);
+    return null;
+  }
+  return count ?? 0;
+}
+
 export async function fetchProspects(params: {
   filters: ProspectFilters;
   tab: ProspectStatusTab;
   sort: ProspectSort;
   page: number;
   pageSize: number;
-}): Promise<{ rows: Prospect[]; totalCount: number }> {
+}): Promise<{ rows: Prospect[]; totalCount: number; failed: boolean }> {
   const supabase = createClient();
-  let query = supabase.from('prospect_view').select('*', { count: 'exact' });
+
+  // NO { count: 'exact' } HERE -- see countProspects above. Adding it back
+  // doubles this statement's work and puts it past the 8-second cap.
+  let query = supabase.from('prospect_view').select('*');
   query = applyProspectFilters(query, params.filters);
   query = applyTabFilter(query, params.tab);
   query = applyProspectSort(query, params.sort);
   const from = (params.page - 1) * params.pageSize;
   query = query.range(from, from + params.pageSize - 1);
 
-  const { data, error, count } = await query;
-  if (error) {
-    console.error('fetchProspects query failed', error);
+  // Two requests in parallel, not two evaluations in one statement.
+  const [rowsResult, totalCount] = await Promise.all([
+    query,
+    countProspects(supabase, params.filters, params.tab),
+  ]);
+
+  if (rowsResult.error) {
+    console.error('fetchProspects query failed', rowsResult.error);
   }
-  return { rows: (data as Prospect[] | null) ?? [], totalCount: count ?? 0 };
+
+  // >>> A FAILED REQUEST IS NOT AN EMPTY RESULT. <<< [2026-10-27] Both
+  // used to return { rows: [], totalCount: 0 } and carry on, so a dead
+  // query rendered as "this agency has no prospects" -- and the empty
+  // state tells the customer to create a campaign they already have.
+  // Seen live with 2,404 prospects on screen as "Tous 2404" while the
+  // body said to create one.
+  return {
+    rows: (rowsResult.data as Prospect[] | null) ?? [],
+    totalCount: totalCount ?? 0,
+    failed: rowsResult.error !== null || totalCount === null,
+  };
 }
 
 // Six head-only queries (no rows, count only), one per tab, run together
@@ -3902,15 +3990,31 @@ export async function fetchProspects(params: {
 export async function fetchProspectStatusCounts(
   filters: ProspectFilters,
 ): Promise<Record<ProspectStatusTab, number>> {
-  const supabase = createClient();
+    const supabase = createClient();
   const tabs: ProspectStatusTab[] = ['tous', 'a_traiter', 'en_cours', 'sans_reponse', 'gagnes', 'ignores'];
+
+  // [2026-10-27] Six counts against prospect_view were six full
+  // evaluations of an eight-table view, three of them 5.2-5.4 s. Every
+  // tab predicate is `outcome`, which is a column on leads, so whenever
+  // no view-only filter is active these go to leads and finish in
+  // milliseconds. With such a filter on they stay on the view, because
+  // keyword / city / is_claimed / website_kind / email / the name search
+  // do not exist there.
+  const viewOnly = usesViewOnlyFilters(filters);
 
   const results = await Promise.all(
     tabs.map((tab) => {
-      let query = supabase.from('prospect_view').select('id', { count: 'exact', head: true });
-      query = applyProspectFilters(query, filters);
-      query = applyTabFilter(query, tab);
-      return query;
+      if (!viewOnly) {
+        const q = supabase
+          .from('leads')
+          .select('id', { count: 'exact', head: true })
+          .not('delivered_at', 'is', null);
+        return applyTabFilter(q, tab);
+      }
+      let q = supabase.from('prospect_view').select('id', { count: 'exact', head: true });
+      q = applyProspectFilters(q, filters);
+      q = applyTabFilter(q, tab);
+      return q;
     }),
   );
 
@@ -3930,7 +4034,6 @@ export async function fetchProspectStatusCounts(
   });
   return counts;
 }
-
 // Distinguishes "no data at all" from "no results for the current
 // filters" -- fixes the pre-existing bug where hasAnyProspectsEver in
 // prospects/page.tsx was declared but never set (null !== false, so
@@ -3940,14 +4043,24 @@ export async function fetchProspectStatusCounts(
 // any prospects at all," showing the wrong empty state to an existing
 // customer. Only needs to tell zero from non-zero, so a head-only count
 // is enough; run once on mount, not on every filter change.
-export async function fetchHasAnyProspects(): Promise<boolean> {
+export async function fetchHasAnyProspects(): Promise<boolean | null> {
   const supabase = createClient();
+  // leads, not prospect_view: this only needs zero-vs-non-zero, and
+  // leads_own_delivered plus idx_leads_delivered answer it in
+  // milliseconds instead of a 5-second evaluation of the view.
   const { count, error } = await supabase
-    .from('prospect_view')
-    .select('id', { count: 'exact', head: true });
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .not('delivered_at', 'is', null);
   if (error) {
     console.error('fetchHasAnyProspects query failed', error);
-    return false;
+    // >>> NULL, NOT FALSE. <<< [2026-10-27] Returning false here is the
+    // defect that rendered "Créez une campagne : choisissez un métier et
+    // une ville" to an agency holding 2,404 prospects, while the tab
+    // above it read 2404. Three states, not two: true (has prospects),
+    // false (genuinely none), null (we do not know -- show an error, and
+    // NEVER the empty state).
+    return null;
   }
   return (count ?? 0) > 0;
 }
