@@ -1681,3 +1681,49 @@ table.campaign-leads-table { width: 100%; border-collapse: collapse; min-width: 
 .town-filter-list li[aria-selected="true"] { font-weight: 600; }
 .town-filter-list .mono-num { color: var(--ink-faint); font-size: 12px; }
 .town-filter-empty { cursor: default; color: var(--ink-faint); font-style: italic; }
+
+/* -- Skeleton rows (prospects table, first load only) -------------------
+   The prospects query runs ~3 s against prospect_view. Everything else on
+   the page arrives in under 100 ms, so without these the table sits under
+   real headers with an empty body, which reads as "no results". */
+
+.skeleton-row td {
+  padding-top: 15px;
+  padding-bottom: 15px;
+}
+
+.skeleton-bar {
+  display: block;
+  height: 12px;
+  border-radius: 3px;
+  background-color: #e8eaee;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.65) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+@keyframes skeleton-shimmer {
+  from { background-position: -100% 0; }
+  to   { background-position: 200% 0; }
+}
+
+/* A shimmer carries no information -- it is motion for its own sake, and
+   that is exactly what this query should respect. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar {
+    animation: none;
+  }
+}

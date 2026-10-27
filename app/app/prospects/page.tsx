@@ -991,6 +991,26 @@ function pageWindow(current: number, total: number): (number | 'ellipsis')[] {
   return out;
 }
 
+// Placeholder rows for the first load only. aria-hidden because there is
+// nothing here to read: the wrapper already carries aria-busy, which is
+// what a screen reader should act on. Animation is dropped under
+// prefers-reduced-motion -- a shimmer is decoration, not information.
+function SkeletonRows({ rows, cols }: { rows: number; cols: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, r) => (
+        <tr key={r} className="skeleton-row" aria-hidden="true">
+          {Array.from({ length: cols }, (_unused, c) => (
+            <td key={c}>
+              <span className="skeleton-bar" />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
 function ProspectsPageInner() {
   const isMobile = useIsMobile();
   const [filtresOpen, setFiltresOpen] = useState(false);
@@ -1496,8 +1516,12 @@ function ProspectsPageInner() {
                   <th>Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {visibleRows.map((p) => {
+                            <tbody>
+                {loading && rows.length === 0 ? (
+                  // 13 columns, same count as the detail row's colSpan.
+                  <SkeletonRows rows={10} cols={13} />
+                ) : (
+                  visibleRows.map((p) => {
                   const ficheState = getFicheGoogleState(p);
                   const emailState = getEmailCellState(p);
                   const isExpanded = expandedId === p.id;
@@ -1651,15 +1675,25 @@ function ProspectsPageInner() {
                     )}
                     </Fragment>
                   );
-                })}
+                })
+                )}
               </tbody>
             </table>
           </div>
           )}
 
-          {isMobile === true && (
-            <div className="prospect-card-list">
-              {visibleRows.map((p) => (
+                    {isMobile === true && (
+            <div className="prospect-card-list" aria-busy={loading}>
+              {loading && rows.length === 0 ? (
+                Array.from({ length: 5 }, (_, i) => (
+                  <div key={i} className="prospect-card skeleton-card" aria-hidden="true">
+                    <span className="skeleton-bar" style={{ width: '60%' }} />
+                    <span className="skeleton-bar" style={{ width: '35%' }} />
+                    <span className="skeleton-bar" style={{ width: '80%' }} />
+                  </div>
+                ))
+              ) : (
+                visibleRows.map((p) => (
                 <ProspectCard
                   key={p.id}
                   p={p}
@@ -1671,7 +1705,8 @@ function ProspectsPageInner() {
                   pdfLoadingAgency={pdfLoading[`${p.id}-agency`] === true}
                   pdfError={pdfError[`${p.id}-client`] || pdfError[`${p.id}-agency`] || null}
                 />
-              ))}
+                ))
+              )}
             </div>
           )}
 
