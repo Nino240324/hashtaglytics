@@ -3895,6 +3895,27 @@ function usesViewOnlyFilters(f: ProspectFilters): boolean {
   );
 }
 
+// >>> PHASE 1 OF THE TWO-PHASE READ. <<< [2026-10-28]
+// prospect_core_view is prospect_view's narrow core: the same four joins, the same
+// WHERE delivered_at IS NOT NULL, every column the page filters / sorts / tabs on, and
+// NEITHER lateral. Measured under RLS 2026-10-28: 54.6 ms / 26,574 buffers for the whole
+// agency's 2,404 delivered leads, against prospect_view's 2,404 rows x both laterals.
+// MIGRATION 21a; CHECK V1 proved the two views identify exactly the same leads
+// (2,411 / 2,411 / 0 / 0).
+const PROSPECT_CORE_VIEW = 'prospect_core_view';
+
+// best_rank is computed by prospect_view's `r` lateral and is deliberately NOT on the
+// core view -- it is the column the laterals exist to produce. So phase 1 cannot order by
+// it, and that one sort stays on the full view. Product decision, recorded in
+// Review_prospect_core_view_2026-10-28.md F-2 and confirmed by Nino 2026-10-28: the rank
+// spread is the sales argument, so the sort stays and pays for itself.
+// Its cost after MIGRATION 22 + 19c: ~1.1 s for 2,404 rows, linear in delivered leads
+// (~3.6 s at 8,000). The bound is the stored rank, not a capped fallback -- sorting the
+// first N rows by best_rank is not a sort by best_rank.
+function sortNeedsFullView(sort: ProspectSort): boolean {
+  return sort.key === 'best_rank';
+}
+
 // >>> THE COUNT IS A SEPARATE REQUEST NOW, AND THAT IS THE POINT. <<<
 // [2026-10-27] PostgREST answers { count: 'exact' } by evaluating the
 // same relation a SECOND time, unlimited, inside the same statement --
@@ -3931,7 +3952,9 @@ async function countProspects(
     return count ?? 0;
   }
 
-  let q = supabase.from('prospect_view').select('id', { count: 'exact', head: true });
+  // The core view, not prospect_view: a count needs to know WHICH rows match, never what
+  // they contain, and the laterals produce nothing a count can use.
+  let q = supabase.from(PROSPECT_CORE_VIEW).select('id', { count: 'exact', head: true });
   q = applyProspectFilters(q, filters);
   q = applyTabFilter(q, tab);
   const { count, error } = await q;
@@ -3942,6 +3965,20 @@ async function countProspects(
   return count ?? 0;
 }
 
+// >>> TWO QUESTIONS INSTEAD OF ONE. <<< [2026-10-28]
+// prospect_view's two LEFT JOIN LATERALs are evaluated for every row the statement
+// produces, and the planner will not push a LIMIT below them: measured 2026-10-27, 2,404
+// rows built and 2,354 discarded to serve 50, 3,004 ms through the API. So:
+//   phase 1   WHICH 50 leads?   -> prospect_core_view: same filters, same sort, same range
+//   phase 2   WHAT ARE THEY?    -> prospect_view WHERE id IN (those 50)
+// Phase 2 then runs the laterals 50 times rather than 2,404. Measured under RLS after
+// MIGRATION 22 and 19c: 54.6 ms + 61.5 ms = 116 ms in the editor, 42,429 buffers against
+// ~134,000 before. The browser number is larger and is the one that counts -- two round
+// trips, PostgREST serialising 50 x 42 columns, and React rendering.
+//
+// NO { count: 'exact' } ON EITHER PHASE -- see countProspects. PostgREST answers it by
+// evaluating the relation a SECOND time, unlimited, in the same statement: 8,035 ms and a
+// 500 on 2026-10-27.
 export async function fetchProspects(params: {
   filters: ProspectFilters;
   tab: ProspectStatusTab;
@@ -3950,37 +3987,104 @@ export async function fetchProspects(params: {
   pageSize: number;
 }): Promise<{ rows: Prospect[]; totalCount: number; failed: boolean }> {
   const supabase = createClient();
-
-  // NO { count: 'exact' } HERE -- see countProspects above. Adding it back
-  // doubles this statement's work and puts it past the 8-second cap.
-  let query = supabase.from('prospect_view').select('*');
-  query = applyProspectFilters(query, params.filters);
-  query = applyTabFilter(query, params.tab);
-  query = applyProspectSort(query, params.sort);
   const from = (params.page - 1) * params.pageSize;
-  query = query.range(from, from + params.pageSize - 1);
+  const to = from + params.pageSize - 1;
 
-  // Two requests in parallel, not two evaluations in one statement.
-  const [rowsResult, totalCount] = await Promise.all([
-    query,
+  // ------------------------------------------------------------------
+  // The best_rank fallback: one statement on the full view, exactly the
+  // shape that shipped on 2026-10-27. See sortNeedsFullView above.
+  // ------------------------------------------------------------------
+  if (sortNeedsFullView(params.sort)) {
+    let query = supabase.from('prospect_view').select('*');
+    query = applyProspectFilters(query, params.filters);
+    query = applyTabFilter(query, params.tab);
+    query = applyProspectSort(query, params.sort);
+    query = query.range(from, to);
+
+    const [rowsResult, totalCount] = await Promise.all([
+      query,
+      countProspects(supabase, params.filters, params.tab),
+    ]);
+
+    if (rowsResult.error) {
+      console.error('fetchProspects: best_rank fallback failed', rowsResult.error);
+    }
+    return {
+      rows: (rowsResult.data as Prospect[] | null) ?? [],
+      totalCount: totalCount ?? 0,
+      failed: rowsResult.error !== null || totalCount === null,
+    };
+  }
+
+  // ------------------------------------------------------------------
+  // PHASE 1 -- which 50? Filters, tab, sort and range all applied here,
+  // by the same three helpers as before, so there is exactly one
+  // definition of what the page is asking for.
+  // ------------------------------------------------------------------
+  let idQuery = supabase.from(PROSPECT_CORE_VIEW).select('id');
+  idQuery = applyProspectFilters(idQuery, params.filters);
+  idQuery = applyTabFilter(idQuery, params.tab);
+  idQuery = applyProspectSort(idQuery, params.sort);
+  idQuery = idQuery.range(from, to);
+
+  const [idResult, totalCount] = await Promise.all([
+    idQuery,
     countProspects(supabase, params.filters, params.tab),
   ]);
 
-  if (rowsResult.error) {
-    console.error('fetchProspects query failed', rowsResult.error);
+  // >>> A FAILED PHASE 1 IS A FAILURE, NOT AN EMPTY PAGE. <<< Returning
+  // rows: [] with failed: false here is the 2026-10-27 defect from the
+  // other side -- the page would show "Créez une campagne" to an agency
+  // that has 2,404 prospects.
+  if (idResult.error) {
+    console.error('fetchProspects: phase 1 (prospect_core_view) failed', idResult.error);
+    return { rows: [], totalCount: totalCount ?? 0, failed: true };
   }
 
-  // >>> A FAILED REQUEST IS NOT AN EMPTY RESULT. <<< [2026-10-27] Both
-  // used to return { rows: [], totalCount: 0 } and carry on, so a dead
-  // query rendered as "this agency has no prospects" -- and the empty
-  // state tells the customer to create a campaign they already have.
-  // Seen live with 2,404 prospects on screen as "Tous 2404" while the
-  // body said to create one.
-  return {
-    rows: (rowsResult.data as Prospect[] | null) ?? [],
-    totalCount: totalCount ?? 0,
-    failed: rowsResult.error !== null || totalCount === null,
-  };
+  const ids = ((idResult.data as { id: string }[] | null) ?? []).map((r) => r.id);
+
+  // >>> ZERO IDS MUST NOT REACH PHASE 2. <<< .in('id', []) renders as
+  // `id=in.()`, which is a PostgREST SYNTAX ERROR, not an empty result --
+  // the same wall fetchCampaignsOverview already answers for its own id
+  // filter. This is a legitimate empty page (a filter matching nothing),
+  // so failed stays false unless the COUNT is what failed.
+  if (ids.length === 0) {
+    return { rows: [], totalCount: totalCount ?? 0, failed: totalCount === null };
+  }
+
+  // ------------------------------------------------------------------
+  // PHASE 2 -- what are they? IDS ONLY. No filters, no tab, no sort.
+  // Re-applying the tab here would drop a row whose outcome changed
+  // between the two requests and return 49 rows for 50 ids. The ids ARE
+  // the filter; phase 1 already decided.
+  // ------------------------------------------------------------------
+  const rowsResult = await supabase.from('prospect_view').select('*').in('id', ids);
+
+  if (rowsResult.error) {
+    console.error('fetchProspects: phase 2 (prospect_view) failed', rowsResult.error);
+    return { rows: [], totalCount: totalCount ?? 0, failed: true };
+  }
+
+  // >>> PHASE 2 COMES BACK UNORDERED, AND THE PAGE DOES NOT RE-SORT. <<<
+  // `id=in.(...)` carries no ORDER BY, so PostgREST returns index order,
+  // and page.tsx renders `rows` in the order given. Re-ordered here by
+  // phase 1's own list through a position lookup -- NOT by sorting on the
+  // key again, which would duplicate applyProspectSort's NULL rules and
+  // its id tiebreak and let the two drift apart.
+  //
+  // Building through a Map also makes a duplicate id harmless. 19c's
+  // commune hunk removed the one way prospect_view could produce one, and
+  // CHECK V1 proved none exists; this is the cheap second guard, because a
+  // prospect listed twice on screen is worse than a row quietly dropped.
+  const byId = new Map<string, Prospect>();
+  for (const r of (rowsResult.data as Prospect[] | null) ?? []) {
+    if (!byId.has(r.id)) byId.set(r.id, r);
+  }
+  const rows = ids
+    .map((id) => byId.get(id))
+    .filter((r): r is Prospect => r !== undefined);
+
+  return { rows, totalCount: totalCount ?? 0, failed: totalCount === null };
 }
 
 // Six head-only queries (no rows, count only), one per tab, run together
@@ -4011,7 +4115,7 @@ export async function fetchProspectStatusCounts(
           .not('delivered_at', 'is', null);
         return applyTabFilter(q, tab);
       }
-      let q = supabase.from('prospect_view').select('id', { count: 'exact', head: true });
+      let q = supabase.from(PROSPECT_CORE_VIEW).select('id', { count: 'exact', head: true });
       q = applyProspectFilters(q, filters);
       q = applyTabFilter(q, tab);
       return q;
@@ -4159,7 +4263,7 @@ export async function renderProspectPdf(
 // changes.
 export async function getAvailableKeywords(): Promise<string[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('prospect_view').select('keyword');
+  const { data, error } = await supabase.from(PROSPECT_CORE_VIEW).select('keyword');
   if (error) {
     console.error('getAvailableKeywords query failed', error);
     return [];
@@ -4172,7 +4276,7 @@ export async function getAvailableKeywords(): Promise<string[]> {
 // sees it.
 export async function getAvailableCities(): Promise<string[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('prospect_view').select('city');
+  const { data, error } = await supabase.from(PROSPECT_CORE_VIEW).select('city');
   if (error) {
     console.error('getAvailableCities query failed', error);
     return [];
