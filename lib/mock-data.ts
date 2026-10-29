@@ -4263,7 +4263,7 @@ export async function renderProspectPdf(
 // changes.
 export async function getAvailableKeywords(): Promise<string[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from(PROSPECT_CORE_VIEW).select('keyword');
+  const { data, error } = await supabase.from('prospect_keywords').select('keyword');
   if (error) {
     console.error('getAvailableKeywords query failed', error);
     return [];
@@ -4276,7 +4276,7 @@ export async function getAvailableKeywords(): Promise<string[]> {
 // sees it.
 export async function getAvailableCities(): Promise<string[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from(PROSPECT_CORE_VIEW).select('city');
+  const { data, error } = await supabase.from('prospect_cities').select('city');
   if (error) {
     console.error('getAvailableCities query failed', error);
     return [];
